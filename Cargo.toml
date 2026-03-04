@@ -1,0 +1,24 @@
+[package]
+name = "zrk"
+version = "0.1.0"
+edition = "2021"
+description = "Install review workflow files into AI coding agent config directories"
+license = "MIT"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+dirs = "5"
+colored = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+dialoguer = { version = "0.11", optional = true }
+
+[features]
+default = ["wizard"]
+wizard = ["dialoguer"]
+
+[dev-dependencies]
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"

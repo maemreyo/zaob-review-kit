@@ -1,0 +1,4 @@
+# zrk review materials (per-review output — don't commit)
+.materials/*/review_context.xml
+.materials/*/review.patch
+.materials/*/review_prompt.md

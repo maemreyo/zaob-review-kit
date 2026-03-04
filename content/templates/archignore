@@ -1,0 +1,46 @@
+# .archignore — files to exclude from review context
+# Used by zrk review workflow to filter out irrelevant files
+
+# Dependencies
+node_modules/
+vendor/
+target/
+.venv/
+
+# Build output
+dist/
+build/
+out/
+*.min.js
+*.min.css
+*.map
+
+# Generated
+*.lock
+*.generated.*
+__generated__/
+
+# Binary / media
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.woff
+*.woff2
+*.ttf
+*.eot
+*.pdf
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
