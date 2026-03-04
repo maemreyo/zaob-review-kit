@@ -97,12 +97,21 @@ pub fn execute(actions: &[InstallAction], quiet: bool) -> Result<InstallSummary,
                 }
                 summary.installed += 1;
             }
-            InstallAction::AppendToFile { path, section_header, content } => {
+            InstallAction::AppendToFile { path, section_header, content, manifest_base } => {
                 append_or_replace_section(path, section_header, content)?;
                 if !quiet {
                     output::success(&format!("Updated {}", path.display()));
                 }
                 summary.installed += 1;
+
+                // Track the consolidated file (one entry covers all sections).
+                if let Some(filename) = path.file_name() {
+                    let file_content = std::fs::read_to_string(path).map_err(ZrkError::Io)?;
+                    pending
+                        .entry(manifest_base.clone())
+                        .or_insert_with(|| Manifest::new(""))
+                        .add_file(&filename.to_string_lossy(), &file_content);
+                }
             }
         }
     }
@@ -178,7 +187,7 @@ pub fn dry_run_display(actions: &[InstallAction]) {
                 let verb = if *overwrite { "overwrite" } else { "create" };
                 output::info(&format!("Would {} template: {}", verb, dest.display()));
             }
-            InstallAction::AppendToFile { path, section_header, .. } => {
+            InstallAction::AppendToFile { path, section_header, manifest_base: _, .. } => {
                 output::info(&format!(
                     "Would append/replace section '{}' in: {}",
                     section_header,
@@ -362,6 +371,7 @@ mod tests {
             path: path.clone(),
             section_header: "review-roles".to_string(),
             content: "# Roles content".to_string(),
+            manifest_base: dir.path().to_path_buf(),
         }];
 
         execute(&actions, true).unwrap();
@@ -380,6 +390,7 @@ mod tests {
             path: path.clone(),
             section_header: "review-roles".to_string(),
             content: "# Roles content".to_string(),
+            manifest_base: dir.path().to_path_buf(),
         }];
 
         execute(&actions, true).unwrap();
@@ -403,6 +414,7 @@ mod tests {
             path: path.clone(),
             section_header: "review-roles".to_string(),
             content: "new roles content".to_string(),
+            manifest_base: dir.path().to_path_buf(),
         }];
 
         execute(&actions, true).unwrap();

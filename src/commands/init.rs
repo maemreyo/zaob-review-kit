@@ -20,8 +20,8 @@ pub struct InitConfig {
 fn prompt_user(cwd: &Path) -> Result<InitConfig, ZrkError> {
     use dialoguer::{Confirm, MultiSelect};
 
-    let agent_names = ["kiro", "claude-code", "cursor", "windsurf"];
-    let agent_labels = ["Kiro", "Claude Code", "Cursor", "Windsurf"];
+    let agent_names = ["kiro", "claude-code", "cursor", "windsurf", "antigravity", "trae"];
+    let agent_labels = ["Kiro", "Claude Code", "Cursor", "Windsurf", "Google Antigravity", "TRAE"];
 
     let selections = MultiSelect::new()
         .with_prompt("Which agents are you using?")

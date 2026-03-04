@@ -37,6 +37,7 @@ pub enum InstallAction {
         path: PathBuf,
         section_header: String,
         content: String,
+        manifest_base: PathBuf,
     },
     CopyTemplate {
         dest: PathBuf,
@@ -62,11 +63,7 @@ pub fn plan_install(agent: &dyn Agent, cwd: &Path, force: bool) -> Vec<InstallAc
         let output = agent.transform_workspace(file);
 
         // Route to workflow_dir when agent has one and file is a workflow file.
-        let target_dir = if workflow_dir.is_some()
-            && matches!(
-                file.name.as_str(),
-                "prep-review.md" | "pack-materials.md" | "project-context.md"
-            ) {
+        let target_dir = if workflow_dir.is_some() && agent.is_workflow_file(&file.name) {
             workflow_dir.as_ref().unwrap().clone()
         } else {
             workspace_dir.clone()
@@ -79,6 +76,7 @@ pub fn plan_install(agent: &dyn Agent, cwd: &Path, force: bool) -> Vec<InstallAc
                 path: target_dir.join(&output.filename),
                 section_header: section,
                 content: output.content,
+                manifest_base: target_dir.clone(),
             });
         } else {
             let dest = target_dir.join(&output.filename);
@@ -131,6 +129,7 @@ pub fn plan_install_global(agent: &dyn Agent, force: bool) -> Vec<InstallAction>
                         path: dest,
                         section_header: section,
                         content: output.content,
+                        manifest_base: global_dir.clone(),
                     });
                 } else if dest.exists() && !force {
                     actions.push(InstallAction::SkipExisting { path: dest });

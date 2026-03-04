@@ -33,5 +33,7 @@ fn list_shows_agents_and_content() {
         .stdout(predicate::str::contains("Claude Code"))
         .stdout(predicate::str::contains("Cursor"))
         .stdout(predicate::str::contains("Windsurf"))
+        .stdout(predicate::str::contains("Google Antigravity"))
+        .stdout(predicate::str::contains("TRAE"))
         .stdout(predicate::str::contains("review-roles.md"));
 }

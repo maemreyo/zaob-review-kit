@@ -28,9 +28,15 @@ pub trait Agent {
     fn transform_workspace(&self, file: &ContentFile) -> TransformOutput;
 
     /// Optional secondary workspace directory for workflow files (e.g. Antigravity's .agent/workflows/).
-    /// When Some, the planner routes workflow content files there instead of workspace_dir.
+    /// When Some, the planner routes files where is_workflow_file() returns true there instead of workspace_dir.
     fn workflow_dir(&self, _cwd: &Path) -> Option<PathBuf> {
         None
+    }
+
+    /// Returns true when the named workspace file should go into workflow_dir instead of workspace_dir.
+    /// Only meaningful when workflow_dir() returns Some.
+    fn is_workflow_file(&self, _name: &str) -> bool {
+        false
     }
 
     /// When true, the planner uses AppendToFile instead of WriteFile for workspace files,

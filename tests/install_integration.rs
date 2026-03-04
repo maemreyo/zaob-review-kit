@@ -80,11 +80,13 @@ fn install_all_with_all_targets() {
         .assert()
         .success();
 
-    // All 4 agents should have workspace dirs
+    // All 6 agents should have workspace dirs
     assert!(dir.path().join(".kiro").join("steering").exists());
     assert!(dir.path().join(".claude").join("commands").join("review-kit").exists());
     assert!(dir.path().join(".cursor").join("rules").exists());
     assert!(dir.path().join(".windsurf").join("rules").exists());
+    assert!(dir.path().join(".agent").join("rules").exists());
+    assert!(dir.path().join(".trae").join("rules").exists());
 }
 
 #[test]

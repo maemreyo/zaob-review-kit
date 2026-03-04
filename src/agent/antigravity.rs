@@ -17,11 +17,6 @@ impl Antigravity {
     pub fn new() -> Self {
         Self { home: HomeResolver::new() }
     }
-
-    /// Files that belong in the workflow directory rather than rules.
-    fn is_workflow_file(name: &str) -> bool {
-        matches!(name, "prep-review.md" | "pack-materials.md" | "project-context.md")
-    }
 }
 
 impl Agent for Antigravity {
@@ -43,6 +38,10 @@ impl Agent for Antigravity {
 
     fn workflow_dir(&self, cwd: &Path) -> Option<PathBuf> {
         Some(cwd.join(".agent").join("workflows"))
+    }
+
+    fn is_workflow_file(&self, name: &str) -> bool {
+        matches!(name, "prep-review.md" | "pack-materials.md" | "project-context.md")
     }
 
     fn transform_global(&self, file: &ContentFile) -> TransformOutput {
@@ -135,10 +134,11 @@ mod tests {
 
     #[test]
     fn antigravity_is_workflow_file_classification() {
-        assert!(Antigravity::is_workflow_file("prep-review.md"));
-        assert!(Antigravity::is_workflow_file("pack-materials.md"));
-        assert!(Antigravity::is_workflow_file("project-context.md"));
-        assert!(!Antigravity::is_workflow_file("review-roles.md"));
-        assert!(!Antigravity::is_workflow_file("review-memory.md"));
+        let a = Antigravity::new();
+        assert!(a.is_workflow_file("prep-review.md"));
+        assert!(a.is_workflow_file("pack-materials.md"));
+        assert!(a.is_workflow_file("project-context.md"));
+        assert!(!a.is_workflow_file("review-roles.md"));
+        assert!(!a.is_workflow_file("review-memory.md"));
     }
 }
