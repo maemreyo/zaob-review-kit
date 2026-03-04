@@ -218,9 +218,9 @@ mod tests {
         // First action should be CreateDir
         assert!(matches!(&actions[0], InstallAction::CreateDir { .. }));
 
-        // Should have 3 WriteFile actions (workspace has 3 files)
+        // Should have 4 WriteFile actions (workspace has 4 files)
         let write_count = actions.iter().filter(|a| matches!(a, InstallAction::WriteFile { .. })).count();
-        assert_eq!(write_count, 3);
+        assert_eq!(write_count, 4);
 
         // Should have a WriteManifest
         assert!(actions.iter().any(|a| matches!(a, InstallAction::WriteManifest { .. })));
@@ -232,7 +232,7 @@ mod tests {
         let actions = plan_install_global(&cursor, false);
 
         let manual_count = actions.iter().filter(|a| matches!(a, InstallAction::ManualInstruction { .. })).count();
-        assert_eq!(manual_count, 4); // 4 global files
+        assert_eq!(manual_count, 6); // 6 global files
     }
 
     #[test]
@@ -242,7 +242,7 @@ mod tests {
         let actions = plan_install_global(&kiro, false);
 
         let write_count = actions.iter().filter(|a| matches!(a, InstallAction::WriteFile { .. })).count();
-        assert_eq!(write_count, 4); // 4 global files
+        assert_eq!(write_count, 6); // 6 global files
     }
 
     #[test]
@@ -270,6 +270,6 @@ mod tests {
         assert!(create_dir_count >= 2); // workspace dir + global dir
 
         let write_count = actions.iter().filter(|a| matches!(a, InstallAction::WriteFile { .. })).count();
-        assert_eq!(write_count, 7); // 3 workspace + 4 global
+        assert_eq!(write_count, 10); // 4 workspace + 6 global
     }
 }

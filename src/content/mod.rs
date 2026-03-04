@@ -39,6 +39,16 @@ pub fn all_content() -> Vec<ContentFile> {
             scope: ContentScope::Global,
             raw: include_str!("../../content/global/review-memory.md"),
         },
+        ContentFile {
+            name: "review-security.md".into(),
+            scope: ContentScope::Global,
+            raw: include_str!("../../content/global/review-security.md"),
+        },
+        ContentFile {
+            name: "review-performance.md".into(),
+            scope: ContentScope::Global,
+            raw: include_str!("../../content/global/review-performance.md"),
+        },
         // Workspace
         ContentFile {
             name: "prep-review.md".into(),
@@ -54,6 +64,11 @@ pub fn all_content() -> Vec<ContentFile> {
             name: "project-context.md".into(),
             scope: ContentScope::Workspace,
             raw: include_str!("../../content/workspace/project-context.md"),
+        },
+        ContentFile {
+            name: "review-checklist.md".into(),
+            scope: ContentScope::Workspace,
+            raw: include_str!("../../content/workspace/review-checklist.md"),
         },
         // Templates
         ContentFile {
@@ -82,18 +97,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn all_content_returns_9_files() {
-        assert_eq!(all_content().len(), 9);
+    fn all_content_returns_12_files() {
+        assert_eq!(all_content().len(), 12);
     }
 
     #[test]
-    fn by_scope_global_returns_4() {
-        assert_eq!(by_scope(ContentScope::Global).len(), 4);
+    fn by_scope_global_returns_6() {
+        assert_eq!(by_scope(ContentScope::Global).len(), 6);
     }
 
     #[test]
-    fn by_scope_workspace_returns_3() {
-        assert_eq!(by_scope(ContentScope::Workspace).len(), 3);
+    fn by_scope_workspace_returns_4() {
+        assert_eq!(by_scope(ContentScope::Workspace).len(), 4);
     }
 
     #[test]

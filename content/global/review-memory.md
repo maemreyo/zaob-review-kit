@@ -1,24 +1,46 @@
 # Review Memory
 
 ## Purpose
-Maintain a persistent memory of review patterns across sessions.
-After each review, update `.materials/review_memory.md` with:
 
-## What to Remember
-- Recurring issues found across reviews
-- Project-specific conventions and patterns
-- Areas of the codebase that frequently have problems
-- Reviewer preferences and feedback patterns
+Persistent memory of review patterns. Agent reads `.materials/review_memory.md` BEFORE starting any new review.
 
-## Memory Format
-Each entry should include:
-- Date of the review
-- Brief description of what was reviewed
-- Key findings or patterns discovered
-- Any action items that were deferred
+## Entry Format
 
-## Usage
-Before starting a new review, read the review memory to:
-- Avoid repeating the same suggestions
-- Track whether previous issues have been addressed
-- Build context about the project over time
+After each review, APPEND to `.materials/review_memory.md`:
+
+```markdown
+### [YYYY-MM-DD] <Scope: brief description>
+
+- **Files reviewed**: <list>
+- **Key findings**: <1-3 most important issues found>
+- **Recurring from previous**: <yes/no — which pattern repeated>
+- **Deferred**: <issues flagged but not fixed yet>
+- **Patterns to watch**: <what to look for in future reviews>
+```
+
+## Usage Protocol
+
+**Before new review:**
+
+1. Read `.materials/review_memory.md` if it exists
+2. Check "Deferred" items — were they addressed in this change?
+3. Check "Patterns to watch" — did those patterns appear again?
+
+**During review:**
+
+- Note if a finding matches a "Recurring" pattern → flag as persistent issue
+
+**After review:**
+
+- Append new entry to `.materials/review_memory.md`
+- If file does not exist: create it with the first entry
+
+## Example Entry
+
+### [2025-03-15] Last 2 commits — Add user auth endpoints
+
+- **Files reviewed**: src/auth/handler.rs, src/models/user.rs
+- **Key findings**: Missing rate limiting on /login; password compared before hashing
+- **Recurring from previous**: Yes — input validation gaps (3rd occurrence)
+- **Deferred**: Refactor token refresh logic (needs design discussion)
+- **Patterns to watch**: Auth handlers, any new endpoint added without middleware
