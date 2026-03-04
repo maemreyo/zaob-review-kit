@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "Install review workflow files into AI coding agent config directories"
 license = "MIT"
+repository = "https://github.com/maemreyo/zaob-review-kit"
+homepage = "https://github.com/maemreyo/zaob-review-kit"
+keywords = ["ai", "review", "workflow", "claude", "coding-agent"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
