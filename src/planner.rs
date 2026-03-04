@@ -12,6 +12,7 @@ pub enum InstallAction {
         path: PathBuf,
         content: String,
         overwrite: bool,
+        manifest_base: PathBuf,
     },
     SkipExisting {
         path: PathBuf,
@@ -58,6 +59,7 @@ pub fn plan_install(agent: &dyn Agent, cwd: &Path, force: bool) -> Vec<InstallAc
                 path: dest,
                 content: output.content,
                 overwrite: force,
+                manifest_base: workspace_dir.clone(),
             });
         }
     }
@@ -92,6 +94,7 @@ pub fn plan_install_global(agent: &dyn Agent, force: bool) -> Vec<InstallAction>
                         path: dest,
                         content: output.content,
                         overwrite: force,
+                        manifest_base: global_dir.clone(),
                     });
                 }
             }

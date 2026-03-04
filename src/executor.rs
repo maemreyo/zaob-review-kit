@@ -25,25 +25,29 @@ impl InstallSummary {
 /// Execute a list of install actions, writing files to disk.
 pub fn execute(actions: &[InstallAction], quiet: bool) -> Result<InstallSummary, ZrkError> {
     let mut summary = InstallSummary::default();
-    let mut manifest: Option<(std::path::PathBuf, Manifest)> = None;
+    // Accumulate file hashes per manifest scope (base_dir → Manifest).
+    // Populated by WriteFile, consumed by WriteManifest.
+    let mut pending: std::collections::HashMap<std::path::PathBuf, Manifest> =
+        std::collections::HashMap::new();
 
     for action in actions {
         match action {
             InstallAction::CreateDir { path } => {
                 ensure_dir(path)?;
             }
-            InstallAction::WriteFile { path, content, overwrite: _ } => {
+            InstallAction::WriteFile { path, content, overwrite: _, manifest_base } => {
                 write_file_safe(path, content)?;
                 if !quiet {
                     output::success(&format!("Installed {}", path.display()));
                 }
                 summary.installed += 1;
 
-                // Track in manifest
-                if let Some((_, ref mut m)) = manifest {
-                    if let Some(filename) = path.file_name() {
-                        m.add_file(&filename.to_string_lossy(), content);
-                    }
+                // Accumulate into the correct manifest scope.
+                if let Some(filename) = path.file_name() {
+                    pending
+                        .entry(manifest_base.clone())
+                        .or_insert_with(|| Manifest::new(""))
+                        .add_file(&filename.to_string_lossy(), content);
                 }
             }
             InstallAction::SkipExisting { path } => {
@@ -62,15 +66,10 @@ pub fn execute(actions: &[InstallAction], quiet: bool) -> Result<InstallSummary,
                 summary.manual += 1;
             }
             InstallAction::WriteManifest { base_dir, agent_name } => {
-                let mut m = Manifest::new(agent_name);
-                // Re-collect file hashes from what we just wrote
-                if let Some((ref prev_dir, ref prev_manifest)) = manifest {
-                    if prev_dir == base_dir {
-                        m = prev_manifest.clone();
-                    }
-                }
+                // Take accumulated hashes for this scope, set correct agent name, save.
+                let mut m = pending.remove(base_dir).unwrap_or_else(|| Manifest::new(agent_name));
+                m.agent = agent_name.clone();
                 m.save(base_dir).map_err(ZrkError::Io)?;
-                manifest = Some((base_dir.clone(), m));
             }
             InstallAction::AppendGitignore { cwd, snippet } => {
                 match append_gitignore(cwd, snippet) {
@@ -115,6 +114,7 @@ pub fn dry_run_display(actions: &[InstallAction]) {
                 let verb = if *overwrite { "overwrite" } else { "create" };
                 output::info(&format!("Would {} file: {}", verb, path.display()));
             }
+
             InstallAction::SkipExisting { path } => {
                 output::neutral(&format!("Would skip (exists): {}", path.display()));
             }
@@ -145,14 +145,20 @@ mod tests {
     #[test]
     fn executor_creates_files_on_disk() {
         let dir = tempfile::tempdir().unwrap();
-        let file_path = dir.path().join("subdir").join("test.md");
+        let subdir = dir.path().join("subdir");
+        let file_path = subdir.join("test.md");
 
         let actions = vec![
-            InstallAction::CreateDir { path: dir.path().join("subdir") },
+            InstallAction::CreateDir { path: subdir.clone() },
             InstallAction::WriteFile {
                 path: file_path.clone(),
                 content: "# Test".to_string(),
                 overwrite: false,
+                manifest_base: subdir.clone(),
+            },
+            InstallAction::WriteManifest {
+                base_dir: subdir.clone(),
+                agent_name: "kiro".to_string(),
             },
         ];
 
@@ -160,6 +166,79 @@ mod tests {
         assert_eq!(summary.installed, 1);
         assert!(file_path.exists());
         assert_eq!(std::fs::read_to_string(&file_path).unwrap(), "# Test");
+
+        // Manifest must exist and contain the file's hash
+        let manifest = crate::manifest::Manifest::load(&subdir).unwrap().unwrap();
+        assert!(manifest.files.contains_key("test.md"));
+        assert_eq!(manifest.agent, "kiro");
+    }
+
+    #[test]
+    fn executor_manifest_has_correct_hashes() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().to_path_buf();
+        let content = "# Review Roles";
+        let file_path = base.join("review-roles.md");
+
+        let actions = vec![
+            InstallAction::WriteFile {
+                path: file_path.clone(),
+                content: content.to_string(),
+                overwrite: false,
+                manifest_base: base.clone(),
+            },
+            InstallAction::WriteManifest {
+                base_dir: base.clone(),
+                agent_name: "kiro".to_string(),
+            },
+        ];
+
+        execute(&actions, true).unwrap();
+
+        let manifest = crate::manifest::Manifest::load(&base).unwrap().unwrap();
+        let expected_hash = crate::manifest::sha256_hex(content);
+        assert_eq!(manifest.files["review-roles.md"], expected_hash);
+    }
+
+    #[test]
+    fn executor_two_scopes_produce_two_manifests() {
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = dir.path().join("workspace");
+        let global = dir.path().join("global");
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::create_dir_all(&global).unwrap();
+
+        let actions = vec![
+            InstallAction::WriteFile {
+                path: workspace.join("prep-review.md"),
+                content: "workspace content".to_string(),
+                overwrite: false,
+                manifest_base: workspace.clone(),
+            },
+            InstallAction::WriteFile {
+                path: global.join("review-roles.md"),
+                content: "global content".to_string(),
+                overwrite: false,
+                manifest_base: global.clone(),
+            },
+            InstallAction::WriteManifest {
+                base_dir: workspace.clone(),
+                agent_name: "kiro".to_string(),
+            },
+            InstallAction::WriteManifest {
+                base_dir: global.clone(),
+                agent_name: "kiro".to_string(),
+            },
+        ];
+
+        execute(&actions, true).unwrap();
+
+        let ws_manifest = crate::manifest::Manifest::load(&workspace).unwrap().unwrap();
+        let gl_manifest = crate::manifest::Manifest::load(&global).unwrap().unwrap();
+        assert!(ws_manifest.files.contains_key("prep-review.md"));
+        assert!(gl_manifest.files.contains_key("review-roles.md"));
+        assert!(!ws_manifest.files.contains_key("review-roles.md"));
+        assert!(!gl_manifest.files.contains_key("prep-review.md"));
     }
 
     #[test]
@@ -187,6 +266,7 @@ mod tests {
             path: file_path.clone(),
             content: "new content".to_string(),
             overwrite: true,
+            manifest_base: dir.path().to_path_buf(),
         }];
 
         let summary = execute(&actions, true).unwrap();
@@ -215,6 +295,7 @@ mod tests {
             path: file_path.clone(),
             content: "content".to_string(),
             overwrite: false,
+            manifest_base: dir.path().to_path_buf(),
         }];
 
         dry_run_display(&actions);
