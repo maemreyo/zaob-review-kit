@@ -1,19 +1,16 @@
+use super::home::HomeResolver;
 use super::{Agent, TransformOutput};
 use crate::content::transform::wrap_yaml_frontmatter;
 use crate::content::ContentFile;
 use std::path::{Path, PathBuf};
 
 pub struct Kiro {
-    pub home_override: Option<PathBuf>,
+    pub home: HomeResolver,
 }
 
 impl Kiro {
     pub fn new() -> Self {
-        Self { home_override: None }
-    }
-
-    fn home(&self) -> Option<PathBuf> {
-        self.home_override.clone().or_else(dirs::home_dir)
+        Self { home: HomeResolver::new() }
     }
 }
 
@@ -27,7 +24,7 @@ impl Agent for Kiro {
     }
 
     fn global_dir(&self) -> Option<PathBuf> {
-        Some(self.home()?.join(".kiro").join("steering"))
+        Some(self.home.resolve()?.join(".kiro").join("steering"))
     }
 
     fn workspace_dir(&self, cwd: &Path) -> PathBuf {

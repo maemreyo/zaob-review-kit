@@ -193,7 +193,7 @@ mod tests {
     #[test]
     fn plan_install_global_kiro_produces_write_files() {
         let mut kiro = Kiro::new();
-        kiro.home_override = Some(PathBuf::from("/fake/home"));
+        kiro.home.override_path = Some(PathBuf::from("/fake/home"));
         let actions = plan_install_global(&kiro, false);
 
         let write_count = actions.iter().filter(|a| matches!(a, InstallAction::WriteFile { .. })).count();
@@ -203,7 +203,7 @@ mod tests {
     #[test]
     fn plan_install_force_sets_overwrite() {
         let mut kiro = Kiro::new();
-        kiro.home_override = Some(PathBuf::from("/fake/home"));
+        kiro.home.override_path = Some(PathBuf::from("/fake/home"));
         let actions = plan_install_global(&kiro, true);
 
         for action in &actions {
@@ -216,7 +216,7 @@ mod tests {
     #[test]
     fn plan_install_all_combines_all_scopes() {
         let mut kiro = Kiro::new();
-        kiro.home_override = Some(PathBuf::from("/fake/home"));
+        kiro.home.override_path = Some(PathBuf::from("/fake/home"));
         let cwd = Path::new("/fake/project");
         let actions = plan_install_all(&kiro, cwd, false);
 

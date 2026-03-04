@@ -1,5 +1,6 @@
 pub mod claude_code;
 pub mod cursor;
+pub mod home;
 pub mod kiro;
 pub mod registry;
 pub mod windsurf;
@@ -50,7 +51,7 @@ mod tests {
     #[test]
     fn kiro_global_dir_exists() {
         let mut k = kiro::Kiro::new();
-        k.home_override = Some(PathBuf::from("/fake/home"));
+        k.home.override_path = Some(PathBuf::from("/fake/home"));
         let dir = k.global_dir().unwrap();
         assert_eq!(dir, PathBuf::from("/fake/home/.kiro/steering"));
     }
@@ -82,7 +83,7 @@ mod tests {
     #[test]
     fn claude_code_global_dir_exists() {
         let mut c = claude_code::ClaudeCode::new();
-        c.home_override = Some(PathBuf::from("/fake/home"));
+        c.home.override_path = Some(PathBuf::from("/fake/home"));
         let dir = c.global_dir().unwrap();
         assert_eq!(dir, PathBuf::from("/fake/home/.claude/commands/review-kit"));
     }

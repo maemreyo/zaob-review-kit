@@ -32,6 +32,12 @@ pub fn wrap_comment_header(trigger: &str, content: &str) -> String {
     )
 }
 
+/// Identity transform — no frontmatter, no headers.
+/// Used by agents that read plain markdown (Antigravity, TRAE).
+pub fn as_plain(content: &str) -> String {
+    content.to_string()
+}
+
 /// Change the extension of a filename.
 pub fn change_extension(filename: &str, new_ext: &str) -> String {
     match filename.rfind('.') {
@@ -68,6 +74,12 @@ mod tests {
         let result = wrap_comment_header("review-roles", "# Content");
         assert!(result.starts_with("<!-- trigger: review-roles -->"));
         assert!(result.contains("# Content"));
+    }
+
+    #[test]
+    fn plain_transform_is_identity() {
+        let content = "# Test\n\nSome content.";
+        assert_eq!(as_plain(content), content);
     }
 
     #[test]
