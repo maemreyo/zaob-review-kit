@@ -47,10 +47,14 @@ pub enum InstallAction {
 }
 
 /// Plan workspace file installation for an agent.
-pub fn plan_install(agent: &dyn Agent, cwd: &Path, force: bool) -> Vec<InstallAction> {
+/// `scaffold_context`: when false, project-context.md is excluded from the plan.
+pub fn plan_install(agent: &dyn Agent, cwd: &Path, force: bool, scaffold_context: bool) -> Vec<InstallAction> {
     let workspace_dir = agent.workspace_dir(cwd);
     let workflow_dir = agent.workflow_dir(cwd);
-    let workspace_files = content::by_scope(ContentScope::Workspace);
+    let workspace_files: Vec<_> = content::by_scope(ContentScope::Workspace)
+        .into_iter()
+        .filter(|f| scaffold_context || f.name != "project-context.md")
+        .collect();
     let consolidates = agent.consolidates_to_single_file();
     let mut actions = Vec::new();
 
@@ -112,16 +116,19 @@ pub fn plan_install_global(agent: &dyn Agent, force: bool) -> Vec<InstallAction>
                 path: global_dir.clone(),
             });
 
+            // Pre-compute: how many source files map to each output filename.
+            // Files whose output filename appears more than once use AppendToFile
+            // (e.g. Antigravity maps all 6 global files to GEMINI.md).
+            let filename_counts: std::collections::HashMap<String, usize> =
+                global_files.iter().fold(std::collections::HashMap::new(), |mut m, f| {
+                    *m.entry(agent.transform_global(f).filename).or_insert(0) += 1;
+                    m
+                });
+
             for file in &global_files {
                 let output = agent.transform_global(file);
                 let dest = global_dir.join(&output.filename);
-
-                // When multiple files map to the same destination (e.g. GEMINI.md),
-                // use AppendToFile with per-file section headers instead of WriteFile.
-                let is_consolidated = global_files.iter().any(|f| {
-                    f.name != file.name
-                        && agent.transform_global(f).filename == output.filename
-                });
+                let is_consolidated = filename_counts.get(&output.filename).copied().unwrap_or(0) > 1;
 
                 if is_consolidated {
                     let section = file.name.trim_end_matches(".md").to_string();
@@ -195,7 +202,7 @@ pub fn plan_templates(cwd: &Path, force: bool) -> Vec<InstallAction> {
 /// Plan full installation: workspace + global + templates.
 pub fn plan_install_all(agent: &dyn Agent, cwd: &Path, force: bool) -> Vec<InstallAction> {
     let mut actions = Vec::new();
-    actions.extend(plan_install(agent, cwd, force));
+    actions.extend(plan_install(agent, cwd, force, true));
     actions.extend(plan_install_global(agent, force));
     actions.extend(plan_templates(cwd, force));
     actions
@@ -212,7 +219,7 @@ mod tests {
     fn plan_install_workspace_creates_dir_and_files() {
         let kiro = Kiro::new();
         let cwd = Path::new("/fake/project");
-        let actions = plan_install(&kiro, cwd, false);
+        let actions = plan_install(&kiro, cwd, false, true);
 
         // First action should be CreateDir
         assert!(matches!(&actions[0], InstallAction::CreateDir { .. }));
@@ -270,5 +277,61 @@ mod tests {
 
         let write_count = actions.iter().filter(|a| matches!(a, InstallAction::WriteFile { .. })).count();
         assert_eq!(write_count, 10); // 4 workspace + 6 global
+    }
+
+    #[test]
+    fn plan_install_trae_uses_append_to_file() {
+        use crate::agent::trae::Trae;
+        let trae = Trae::new();
+        let actions = plan_install(&trae, Path::new("/fake/project"), false, true);
+
+        let append_count = actions.iter()
+            .filter(|a| matches!(a, InstallAction::AppendToFile { .. }))
+            .count();
+        assert_eq!(append_count, 4); // 4 workspace files, all consolidated
+
+        // No WriteFile should be emitted for consolidating agents
+        assert!(!actions.iter().any(|a| matches!(a, InstallAction::WriteFile { .. })));
+    }
+
+    #[test]
+    fn plan_install_antigravity_routes_workflows_correctly() {
+        use crate::agent::antigravity::Antigravity;
+        let a = Antigravity::new();
+        let cwd = Path::new("/fake/project");
+        let actions = plan_install(&a, cwd, false, true);
+
+        // Workflow files must land in .agent/workflows/
+        let workflow_writes: Vec<_> = actions.iter()
+            .filter_map(|a| if let InstallAction::WriteFile { path, .. } = a { Some(path) } else { None })
+            .filter(|p| p.components().any(|c| c.as_os_str() == "workflows"))
+            .collect();
+        assert_eq!(workflow_writes.len(), 3, "prep-review, pack-materials, project-context → workflows/");
+
+        // Non-workflow files must land in .agent/rules/
+        let rules_writes: Vec<_> = actions.iter()
+            .filter_map(|a| if let InstallAction::WriteFile { path, .. } = a { Some(path) } else { None })
+            .filter(|p| p.components().any(|c| c.as_os_str() == "rules"))
+            .collect();
+        assert_eq!(rules_writes.len(), 1, "review-checklist.md → rules/");
+    }
+
+    #[test]
+    fn plan_install_scaffold_context_false_excludes_project_context() {
+        let kiro = crate::agent::kiro::Kiro::new();
+        let cwd = Path::new("/fake/project");
+        let actions = plan_install(&kiro, cwd, false, false);
+
+        let has_project_context = actions.iter().any(|a| match a {
+            InstallAction::WriteFile { path, .. } => {
+                path.file_name().map_or(false, |n| n == "project-context.md")
+            }
+            _ => false,
+        });
+        assert!(!has_project_context, "project-context.md must be excluded when scaffold_context=false");
+
+        // Other workspace files must still be present
+        let write_count = actions.iter().filter(|a| matches!(a, InstallAction::WriteFile { .. })).count();
+        assert_eq!(write_count, 3); // 4 workspace - 1 skipped
     }
 }

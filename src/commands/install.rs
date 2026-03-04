@@ -40,7 +40,7 @@ pub fn run_install(cli: &Cli) -> Result<(), ZrkError> {
         if !cli.quiet {
             output::info(&format!("Installing workspace files for {}", agent.label()));
         }
-        let actions = planner::plan_install(agent.as_ref(), &cwd, cli.force);
+        let actions = planner::plan_install(agent.as_ref(), &cwd, cli.force, true);
         if cli.dry_run {
             executor::dry_run_display(&actions);
         } else {

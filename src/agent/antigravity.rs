@@ -41,6 +41,8 @@ impl Agent for Antigravity {
     }
 
     fn is_workflow_file(&self, name: &str) -> bool {
+        // review-checklist.md stays in .agent/rules/ (it supports any workflow,
+        // not a runnable workflow itself — belongs with the other review-* rules).
         matches!(name, "prep-review.md" | "pack-materials.md" | "project-context.md")
     }
 

@@ -71,8 +71,8 @@ pub fn run_init_with_config(config: &InitConfig, quiet: bool) -> Result<(), ZrkE
             output::info(&format!("Setting up {}", agent.label()));
         }
 
-        // Install workspace files
-        let mut actions = planner::plan_install(agent.as_ref(), &config.cwd, false);
+        // Install workspace files (pass scaffold_context so project-context.md can be skipped)
+        let mut actions = planner::plan_install(agent.as_ref(), &config.cwd, false, config.scaffold_context);
 
         // Install global if requested
         if config.install_global {
@@ -157,6 +157,23 @@ mod tests {
         // Cursor global is manual-only, so this should still succeed
         run_init_with_config(&config, true).unwrap();
         assert!(dir.path().join(".cursor").join("rules").exists());
+    }
+
+    #[test]
+    fn init_scaffold_context_false_skips_project_context() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = InitConfig {
+            agents: vec!["kiro".to_string()],
+            install_global: false,
+            scaffold_context: false,
+            cwd: dir.path().to_path_buf(),
+        };
+
+        run_init_with_config(&config, true).unwrap();
+
+        let steering = dir.path().join(".kiro").join("steering");
+        assert!(!steering.join("project-context.md").exists());
+        assert!(steering.join("prep-review.md").exists()); // others still installed
     }
 
     #[test]
