@@ -31,6 +31,13 @@ pub enum InstallAction {
         cwd: PathBuf,
         snippet: String,
     },
+    /// Append (or replace) a named section in a single consolidated file.
+    /// Used by agents that merge all rules into one file (Antigravity's GEMINI.md, TRAE's project_rules.md).
+    AppendToFile {
+        path: PathBuf,
+        section_header: String,
+        content: String,
+    },
     CopyTemplate {
         dest: PathBuf,
         content: String,
@@ -41,26 +48,50 @@ pub enum InstallAction {
 /// Plan workspace file installation for an agent.
 pub fn plan_install(agent: &dyn Agent, cwd: &Path, force: bool) -> Vec<InstallAction> {
     let workspace_dir = agent.workspace_dir(cwd);
+    let workflow_dir = agent.workflow_dir(cwd);
     let workspace_files = content::by_scope(ContentScope::Workspace);
+    let consolidates = agent.consolidates_to_single_file();
     let mut actions = Vec::new();
 
-    actions.push(InstallAction::CreateDir {
-        path: workspace_dir.clone(),
-    });
+    actions.push(InstallAction::CreateDir { path: workspace_dir.clone() });
+    if let Some(ref wf_dir) = workflow_dir {
+        actions.push(InstallAction::CreateDir { path: wf_dir.clone() });
+    }
 
     for file in &workspace_files {
         let output = agent.transform_workspace(file);
-        let dest = workspace_dir.join(&output.filename);
 
-        if dest.exists() && !force {
-            actions.push(InstallAction::SkipExisting { path: dest });
+        // Route to workflow_dir when agent has one and file is a workflow file.
+        let target_dir = if workflow_dir.is_some()
+            && matches!(
+                file.name.as_str(),
+                "prep-review.md" | "pack-materials.md" | "project-context.md"
+            ) {
+            workflow_dir.as_ref().unwrap().clone()
         } else {
-            actions.push(InstallAction::WriteFile {
-                path: dest,
+            workspace_dir.clone()
+        };
+
+        if consolidates {
+            // Use AppendToFile — section header is the original file name (without .md).
+            let section = file.name.trim_end_matches(".md").to_string();
+            actions.push(InstallAction::AppendToFile {
+                path: target_dir.join(&output.filename),
+                section_header: section,
                 content: output.content,
-                overwrite: force,
-                manifest_base: workspace_dir.clone(),
             });
+        } else {
+            let dest = target_dir.join(&output.filename);
+            if dest.exists() && !force {
+                actions.push(InstallAction::SkipExisting { path: dest });
+            } else {
+                actions.push(InstallAction::WriteFile {
+                    path: dest,
+                    content: output.content,
+                    overwrite: force,
+                    manifest_base: target_dir,
+                });
+            }
         }
     }
 
@@ -87,7 +118,21 @@ pub fn plan_install_global(agent: &dyn Agent, force: bool) -> Vec<InstallAction>
                 let output = agent.transform_global(file);
                 let dest = global_dir.join(&output.filename);
 
-                if dest.exists() && !force {
+                // When multiple files map to the same destination (e.g. GEMINI.md),
+                // use AppendToFile with per-file section headers instead of WriteFile.
+                let is_consolidated = global_files.iter().any(|f| {
+                    f.name != file.name
+                        && agent.transform_global(f).filename == output.filename
+                });
+
+                if is_consolidated {
+                    let section = file.name.trim_end_matches(".md").to_string();
+                    actions.push(InstallAction::AppendToFile {
+                        path: dest,
+                        section_header: section,
+                        content: output.content,
+                    });
+                } else if dest.exists() && !force {
                     actions.push(InstallAction::SkipExisting { path: dest });
                 } else {
                     actions.push(InstallAction::WriteFile {

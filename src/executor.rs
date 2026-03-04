@@ -97,10 +97,54 @@ pub fn execute(actions: &[InstallAction], quiet: bool) -> Result<InstallSummary,
                 }
                 summary.installed += 1;
             }
+            InstallAction::AppendToFile { path, section_header, content } => {
+                append_or_replace_section(path, section_header, content)?;
+                if !quiet {
+                    output::success(&format!("Updated {}", path.display()));
+                }
+                summary.installed += 1;
+            }
         }
     }
 
     Ok(summary)
+}
+
+/// Append a named section to a file, or replace it if it already exists.
+/// Section boundaries: `## <header>` to the next `## ` heading or EOF.
+fn append_or_replace_section(
+    path: &std::path::Path,
+    header: &str,
+    content: &str,
+) -> Result<(), ZrkError> {
+    let section_start = format!("## {}", header);
+    let new_section = format!("{}\n\n{}", section_start, content);
+
+    if path.exists() {
+        let existing = std::fs::read_to_string(path).map_err(ZrkError::Io)?;
+        if let Some(start) = existing.find(&section_start) {
+            // Replace from section header to next `## ` or EOF.
+            let after_start = &existing[start..];
+            let end = after_start[section_start.len()..]
+                .find("\n## ")
+                .map(|i| start + section_start.len() + i)
+                .unwrap_or(existing.len());
+            let replaced = format!("{}{}{}", &existing[..start], new_section, &existing[end..]);
+            std::fs::write(path, replaced.trim_end_matches('\n').to_string() + "\n")
+                .map_err(ZrkError::Io)?;
+        } else {
+            // Section not present — append.
+            let separator = if existing.ends_with('\n') { "\n" } else { "\n\n" };
+            std::fs::write(path, format!("{}{}\n", existing, separator) + &new_section + "\n")
+                .map_err(ZrkError::Io)?;
+        }
+    } else {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(ZrkError::Io)?;
+        }
+        std::fs::write(path, format!("{}\n", new_section)).map_err(ZrkError::Io)?;
+    }
+    Ok(())
 }
 
 /// Display what actions would be taken without executing them.
@@ -133,6 +177,13 @@ pub fn dry_run_display(actions: &[InstallAction]) {
             InstallAction::CopyTemplate { dest, overwrite, .. } => {
                 let verb = if *overwrite { "overwrite" } else { "create" };
                 output::info(&format!("Would {} template: {}", verb, dest.display()));
+            }
+            InstallAction::AppendToFile { path, section_header, .. } => {
+                output::info(&format!(
+                    "Would append/replace section '{}' in: {}",
+                    section_header,
+                    path.display()
+                ));
             }
         }
     }
@@ -300,5 +351,66 @@ mod tests {
 
         dry_run_display(&actions);
         assert!(!file_path.exists());
+    }
+
+    #[test]
+    fn append_to_file_creates_new_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("GEMINI.md");
+
+        let actions = vec![InstallAction::AppendToFile {
+            path: path.clone(),
+            section_header: "review-roles".to_string(),
+            content: "# Roles content".to_string(),
+        }];
+
+        execute(&actions, true).unwrap();
+        let written = std::fs::read_to_string(&path).unwrap();
+        assert!(written.contains("## review-roles"));
+        assert!(written.contains("# Roles content"));
+    }
+
+    #[test]
+    fn append_to_file_appends_new_section() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("GEMINI.md");
+        std::fs::write(&path, "## existing-section\n\nexisting content\n").unwrap();
+
+        let actions = vec![InstallAction::AppendToFile {
+            path: path.clone(),
+            section_header: "review-roles".to_string(),
+            content: "# Roles content".to_string(),
+        }];
+
+        execute(&actions, true).unwrap();
+        let written = std::fs::read_to_string(&path).unwrap();
+        assert!(written.contains("## existing-section"));
+        assert!(written.contains("## review-roles"));
+        assert!(written.contains("# Roles content"));
+    }
+
+    #[test]
+    fn append_to_file_replaces_existing_section() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("GEMINI.md");
+        std::fs::write(
+            &path,
+            "## review-roles\n\nold roles content\n\n## review-prompting\n\nprompting content\n",
+        )
+        .unwrap();
+
+        let actions = vec![InstallAction::AppendToFile {
+            path: path.clone(),
+            section_header: "review-roles".to_string(),
+            content: "new roles content".to_string(),
+        }];
+
+        execute(&actions, true).unwrap();
+        let written = std::fs::read_to_string(&path).unwrap();
+        assert!(written.contains("new roles content"));
+        assert!(!written.contains("old roles content"));
+        // Adjacent section must be preserved
+        assert!(written.contains("## review-prompting"));
+        assert!(written.contains("prompting content"));
     }
 }

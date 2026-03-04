@@ -1,8 +1,10 @@
+pub mod antigravity;
 pub mod claude_code;
 pub mod cursor;
 pub mod home;
 pub mod kiro;
 pub mod registry;
+pub mod trae;
 pub mod windsurf;
 
 use crate::content::ContentFile;
@@ -24,6 +26,18 @@ pub trait Agent {
     fn workspace_dir(&self, cwd: &Path) -> PathBuf;
     fn transform_global(&self, file: &ContentFile) -> TransformOutput;
     fn transform_workspace(&self, file: &ContentFile) -> TransformOutput;
+
+    /// Optional secondary workspace directory for workflow files (e.g. Antigravity's .agent/workflows/).
+    /// When Some, the planner routes workflow content files there instead of workspace_dir.
+    fn workflow_dir(&self, _cwd: &Path) -> Option<PathBuf> {
+        None
+    }
+
+    /// When true, the planner uses AppendToFile instead of WriteFile for workspace files,
+    /// consolidating all content into a single file (e.g. TRAE's project_rules.md).
+    fn consolidates_to_single_file(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
