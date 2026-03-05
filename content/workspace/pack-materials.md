@@ -109,6 +109,70 @@ files automatically.
 | "pack the auth changes"                | B         | `rg -l "auth\|jwt\|login" src/ \| repomix --stdin`                                                          |
 | "pack files changed by Jane this week" | A         | `git log --since="1 week ago" --author="Jane" --name-only --pretty=format:'' \| sort -u \| repomix --stdin` |
 
+## Documentation File Inclusion
+
+Include project documentation in review context so reviewers can verify code
+changes align with documented architecture, API contracts, and design decisions.
+
+### Documentation patterns to include
+
+**README files:**
+
+```bash
+find . -name "README.md" -o -name "README.txt" -o -name "README"
+```
+
+**Documentation directories:**
+
+- `docs/`
+- `documentation/`
+- `.github/`
+
+**Architecture diagrams** (in docs/ directories):
+
+- `*.drawio` — Draw.io diagrams
+- `*.mmd` — Mermaid diagrams
+- `*.puml` — PlantUML diagrams
+- `*.svg`, `*.png` — Rendered diagrams (include selectively, may be large)
+
+**API specifications:**
+
+- `openapi.yaml`, `openapi.json`
+- `swagger.yaml`
+- `api-spec.md`
+
+**Design documents:**
+
+- `DESIGN.md`
+- `ARCHITECTURE.md`
+- `ADR-*.md` — Architecture Decision Records
+
+### Packing strategy
+
+Documentation files are packed alongside source code in `review_context.xml`.
+The Software Architect review should reference these when evaluating
+architectural consistency. If documentation contradicts code changes, the
+reviewer should flag the discrepancy.
+
+**Important:** `.archignore` and `.repomixignore` patterns still apply.
+Binary images (_.png, _.svg) should be included selectively — they may be
+large and consume significant token budget. Use `--token-count-tree` to
+preview their impact before packing.
+
+### Example: Include documentation with source files
+
+```bash
+# Combine source files and documentation
+(git diff HEAD~3..HEAD --name-only; \
+ find . -name "README.md" -o -name "ARCHITECTURE.md"; \
+ find docs/ -name "*.mmd" -o -name "*.drawio" 2>/dev/null) | \
+repomix --stdin \
+  --include-diffs \
+  --include-logs-count 3 \
+  --style xml \
+  --output .materials/$TS/review_context.xml
+```
+
 ## Token budget
 
 Target: stay under **100K tokens** for Claude.ai free tier.

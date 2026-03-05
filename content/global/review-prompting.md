@@ -12,6 +12,136 @@ Always structure your review with:
 6. **Recommendations** — prioritized action items
 7. **Verdict** — Ship / Ship with changes / Needs rework / Needs discussion
 
+## Multi-File Output Structure
+
+**Default format is Markdown.** Generate separate `.md` files organized by role perspective unless the user explicitly requests another format (e.g., `.docx`).
+
+### File Naming Convention
+
+All review files use the pattern `<NN>-<slug>.md` where `NN` is a two-digit number ensuring correct alphabetical sort order:
+
+| File                   | Content                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------ |
+| `00-summary.md`        | Overall summary, file walkthrough, risk assessment, review effort, table of contents |
+| `01-swe-review.md`     | Senior Software Engineer findings (always created)                                   |
+| `02-sa-review.md`      | Software Architect findings (always created)                                         |
+| `03-qa-review.md`      | Quality Assurance findings (always created)                                          |
+| `04-pe-review.md`      | Performance Engineer findings (created when triggered)                               |
+| `05-se-review.md`      | Security Engineer findings (created when triggered)                                  |
+| `06-oe-review.md`      | Operations Engineer findings (created when triggered)                                |
+| `07-ceo-review.md`     | CEO perspective findings (created when triggered)                                    |
+| `08-devil-advocate.md` | Devil's Advocate findings (created when triggered)                                   |
+| `99-verdict.md`        | Suggested tests, recommendations, final verdict, AI caveat                           |
+
+### Content Distribution
+
+**Summary File (00-summary.md):**
+
+- One paragraph describing what changed and why
+- File walkthrough table (see File Walkthrough Format section)
+- Risk assessment (Low/Medium/High) with justification
+- Review effort score [1-5] with explanation
+- Table of contents with links to all generated role files and verdict file
+
+**Role Files (01-08):**
+
+- Level-1 header with role name (e.g., `# Senior Software Engineer Review`)
+- Findings specific to that role perspective only
+- Each finding tagged with severity label: `[BLOCKER]`, `[MAJOR]`, `[SUGGESTION]`, `[NIT]`, `[QUESTION]`
+- Specific file paths and line numbers cited when referencing code
+- If no issues found: brief statement "No issues found from this perspective"
+
+**Verdict File (99-verdict.md):**
+
+- Link back to summary file at the top: `[← Back to Summary](00-summary.md)`
+- Suggested tests section (see Suggested Tests Format section)
+- Prioritized recommendations organized by severity
+- Final verdict: Ship / Ship with changes / Needs rework / Needs discussion
+- AI review caveat (see AI Review Caveat section)
+
+### Role Activation
+
+**Core roles** (always create files):
+
+- Senior Software Engineer (01)
+- Software Architect (02)
+- Quality Assurance (03)
+
+**Triggered roles** (create files only when calibration rules activate them):
+
+- Performance Engineer (04) — DB queries, async code, nested loops
+- Security Engineer (05) — auth code, new dependencies
+- Operations Engineer (06) — new endpoints, config changes, retry logic
+- CEO (07) — breaking changes, public API changes
+- Devil's Advocate (08) — breaking changes, public API changes
+
+See Calibration Rules section for complete trigger conditions.
+
+### Navigation Requirements
+
+**Table of Contents in Summary:**
+
+```markdown
+## Review Files
+
+- [Senior Software Engineer Review](01-swe-review.md)
+- [Software Architect Review](02-sa-review.md)
+- [Quality Assurance Review](03-qa-review.md)
+- [Performance Engineer Review](04-pe-review.md) _(if triggered)_
+- [Security Engineer Review](05-se-review.md) _(if triggered)_
+- [Final Verdict](99-verdict.md)
+```
+
+**Back-link in Verdict:**
+
+```markdown
+[← Back to Summary](00-summary.md)
+```
+
+**Cross-references between roles:**
+When a finding in one role file relates to a finding in another, use relative links:
+
+```markdown
+See also [Security Engineer Review](05-se-review.md) for authentication concerns.
+```
+
+### Examples
+
+**Minimal Review (small change, < 50 lines):**
+
+```
+.materials/20250115-143022/
+├── 00-summary.md
+├── 01-swe-review.md
+├── 02-sa-review.md
+├── 03-qa-review.md
+└── 99-verdict.md
+```
+
+**Full Review (large change with auth and DB modifications):**
+
+```
+.materials/20250115-143022/
+├── 00-summary.md
+├── 01-swe-review.md
+├── 02-sa-review.md
+├── 03-qa-review.md
+├── 04-pe-review.md      ← triggered by DB queries
+├── 05-se-review.md      ← triggered by auth code
+├── 06-oe-review.md      ← triggered by new endpoints
+└── 99-verdict.md
+```
+
+### Temp Directory for Agent Working Files
+
+Use `.materials/<timestamp>/temp/` for intermediate working files:
+
+- File lists and caching
+- Draft findings and analysis notes
+- Context notes and working memory
+
+This keeps agent working files organized within the materials directory rather than scattered in system temp locations. The temp directory may be cleaned up after review completion or left for debugging purposes.
+
 ## File Walkthrough Format
 
 Always include a walkthrough table immediately after the Summary. This gives the
