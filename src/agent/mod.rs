@@ -113,14 +113,15 @@ mod tests {
     #[test]
     fn kiro_transform_produces_yaml() {
         let k = kiro::Kiro::new();
-        let output = k.transform_global(&test_file());
+        let output = k.transform_global(&test_file()); // review-roles.md → auto
         assert!(output.content.starts_with("---\n"));
+        assert!(output.content.contains("inclusion: auto"));
         assert!(!output.manual_only);
         assert_eq!(output.filename, "review-roles.md");
     }
 
     #[test]
-    fn kiro_transform_role_standard_has_agent_requested_inclusion() {
+    fn kiro_transform_role_standard_has_manual_inclusion() {
         let k = kiro::Kiro::new();
         let file = ContentFile {
             name: "01-swe-standard.md".into(),
@@ -128,7 +129,8 @@ mod tests {
             raw: "# SWE checklist",
         };
         let output = k.transform_role_standard(&file);
-        assert!(output.content.contains("inclusion: agent-requested"));
+        assert!(output.content.contains("inclusion: manual"));
+        assert!(!output.content.contains("agent-requested"));
         assert_eq!(output.filename, "01-swe-standard.md");
         assert!(!output.manual_only);
     }

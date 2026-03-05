@@ -42,24 +42,19 @@ User says something like:
 
    ```markdown
    # Role Plan
-
    _Written before reading any file content. Based on diff --name-only only._
 
    ## Triggered roles
-
-   | #   | Role | File / pattern that triggered it |
-   | --- | ---- | -------------------------------- |
+   | # | Role | File / pattern that triggered it |
+   |---|------|----------------------------------|
 
    ## Execution order
-
    <!-- e.g.: 01-swe → 02-sa → 03-qa → 05-se → 99-verdict -->
 
    ## Additional roles (from review_prompt.md)
-
    <!-- Any user-specified extras and why -->
 
    ## Skipped roles (from review_prompt.md)
-
    <!-- Any suppressions and why -->
    ```
 
@@ -67,18 +62,16 @@ User says something like:
 
    ```markdown
    # File → Role Map
-
    _Fill while scanning diff content, one row per changed file._
 
    | File | Change type | Roles | Key observation |
-   | ---- | ----------- | ----- | --------------- |
+   |------|-------------|-------|-----------------|
    ```
 
    Write `.materials/$TS/temp/findings.md` (append during review execution):
 
    ```markdown
    # Running Findings Log
-
    _Append one entry per [BLOCKER] or [MAJOR] finding immediately after writing
    each role file. 99-verdict.md reads THIS file — not the individual role files —
    to synthesise without re-loading 60K+ tokens of role output._
@@ -111,7 +104,8 @@ User says something like:
    Install: `brew install ripgrep` / `apt install ripgrep`.
 
 3. **Resolve context and fill file-map** — Expand the file list with direct imports
-   and caller files (one level deep). Fill `temp/file-map.md` as you read each file:
+   and caller files (one level deep). **Fill `temp/file-map.md` as you read each file —
+   do this NOW, during prep, not later during review execution.**
 
    ```bash
    # Forward: what does the changed file import?
@@ -121,7 +115,16 @@ User says something like:
    rg -l "mod students|use.*routes.*students" src/
    ```
 
-   Common patterns:
+   After reading each file's diff, immediately append a row to `temp/file-map.md`:
+
+   ```
+   | src/auth/handler.rs | Modified | SWE, SE | token validation logic changed |
+   ```
+
+   Do not batch this for the end — fill row-by-row as you go. The summary's
+   File Walkthrough table in step 9 should be populated from `temp/file-map.md`.
+
+   Common context patterns:
    - Routes changed → include the router composition file (`src/lib.rs`, `app.rs`, `main.rs`)
    - Models changed → include the lib re-export file
    - Services changed → include the handler that calls them
@@ -148,7 +151,6 @@ User says something like:
    can verify code changes align with documented architecture and design decisions.
 
    **README files:**
-
    ```bash
    find . -name "README.md" -o -name "README.txt" -o -name "README"
    ```
@@ -201,28 +203,23 @@ User says something like:
 
    **Scope**: <N commits / topic description>
    **Date**: <today>
-   **Risk**: <!-- Low / Medium / High -->
-   **Effort**: <!-- [x/5] -->
+   **Risk**: <Low / Medium / High — decide from file-map change types>
+   **Effort**: <[x/5] — decide from total files changed and complexity>
 
    ## What Changed
-
    <!-- One paragraph: what changed and why -->
 
    ## File Walkthrough
-
+   <!-- Copy from temp/file-map.md and expand the Notes column -->
    | File | Change type | What changed | Notes |
-   | ---- | ----------- | ------------ | ----- |
-
-   <!-- Populate from temp/file-map.md -->
+   |------|-------------|--------------|-------|
 
    ## Risk Assessment
-
-   **Level**: <!-- Low / Medium / High -->
+   **Level**: <Low / Medium / High>
    **Justification**: <!-- one sentence -->
-   **Review Effort**: <!-- [x/5] and brief explanation -->
+   **Review Effort**: <[x/5] — see review-prompting.md §Review Effort scale>
 
    ## Review Files
-
    <!-- Table of contents — fill in after all role files are written -->
    ```
 
@@ -234,11 +231,9 @@ User says something like:
    # Verdict
 
    ## Suggested Tests
-
    <!-- Use format from review-prompting.md §Suggested Tests Format -->
 
    ## Prioritised Recommendations
-
    <!-- Synthesised from temp/findings.md — do not re-read individual role files -->
 
    ### Blockers (fix before merge)
@@ -248,12 +243,10 @@ User says something like:
    ### Suggestions (optional)
 
    ## Final Verdict
-
    <!-- Ship / Ship with changes / Needs rework / Needs discussion -->
 
    ---
-
-   _AI-generated review — human sign-off required for any [BLOCKER] or [MAJOR] finding._
+   *AI-generated review — human sign-off required for any [BLOCKER] or [MAJOR] finding.*
    ```
 
 10. **Generate review_prompt.md** — Write a structured prompt:
@@ -279,14 +272,12 @@ User says something like:
     <any specific questions the user mentioned>
 
     ## Additional Roles
-
     <!-- Uncomment or add roles to activate beyond auto-triggered defaults     -->
     <!-- Available: pe, se, oe, de, ux, cl, ceo, da, mle, api, finops, dx     -->
     <!-- Example: - mle   (this PR integrates an LLM API)                      -->
     <!-- Example: - finops (new cloud resources provisioned)                   -->
 
     ## Skip Roles
-
     <!-- Uncomment to suppress auto-triggered roles that are not relevant here -->
     <!-- Example: - ceo   (internal refactor only, no user impact)             -->
     ```

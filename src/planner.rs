@@ -329,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    fn plan_install_role_standards_kiro_has_agent_requested() {
+    fn plan_install_global_cursor_produces_manual_instructions() {
         let cursor = Cursor::new();
         let actions = plan_install_global(&cursor, false);
 
@@ -338,6 +338,35 @@ mod tests {
             .filter(|a| matches!(a, InstallAction::ManualInstruction { .. }))
             .count();
         assert_eq!(manual_count, 6); // 6 global files
+    }
+
+    #[test]
+    fn plan_install_role_standards_kiro_has_manual_inclusion() {
+        let mut kiro = Kiro::new();
+        kiro.home.override_path = Some(PathBuf::from("/fake/home"));
+        let cwd = Path::new("/fake/project");
+        let actions = plan_install_role_standards(&kiro, cwd, false);
+
+        for action in &actions {
+            if let InstallAction::WriteFile { content, path, .. } = action {
+                let fname = path.file_name().unwrap().to_str().unwrap();
+                if fname == "00-loading-guide.md" {
+                    assert!(
+                        content.contains("inclusion: always"),
+                        "{fname}: must be always"
+                    );
+                } else {
+                    assert!(
+                        content.contains("inclusion: manual"),
+                        "{fname}: must be manual, not always"
+                    );
+                    assert!(
+                        !content.contains("agent-requested"),
+                        "{fname}: no agent-requested"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
