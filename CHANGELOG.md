@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2025-03-05
+
+### Added
+
+- Comprehensive role-based review standards
+  - Added 15 new role standard documents with detailed review criteria
+  - Roles: SWE, SA, QA, PE, SE, OE, DE (Data Engineer), UX, CL (Cloud), CEO, DA (Devil's Advocate), MLE (ML Engineer), API, FinOps, DX (Developer Experience)
+  - Added loading guide (00-loading-guide.md) for role standards
+  - Integrated role standards into agent modules (Kiro, TRAE)
+
+- Restructured review workflow with temp file protocol
+  - Introduced reports/ subdirectory for role review outputs (better organization)
+  - Added temp/ directory protocol with three coordinating files:
+    - role-plan.md: tracks which roles to execute
+    - file-map.md: maps role outputs to filenames
+    - findings.md: compressed log of blockers/majors for verdict synthesis
+  - Updated .gitignore to exclude temp/ while keeping reports/ committed
+
+### Changed
+
+- Enhanced review-prompting.md with improved content and temp file protocol
+- Updated review-roles.md with better role guidance
+- Restructured prep-review.md with detailed steps for directory initialization
+- Improved review execution flow to append findings after each role
+- Verdict synthesis now reads only findings.md instead of individual role files (efficiency improvement)
+
+### Fixed
+
+- Cleaned up unused transitive dependencies in Cargo.lock
+- Downgraded rustix and tempfile to compatible versions for stability
+
 ## [0.4.0] - 2025-03-05
 
 ### Added
