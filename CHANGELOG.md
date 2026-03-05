@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2025-03-05
+
+### Added
+
+- Anti-patterns guide in pack-materials.md
+  - "Never write an intermediate file list" section with examples of heredoc and temp-file anti-patterns
+  - Warnings about patterns that hang terminal agents
+  - Documentation of direct piping approach as correct pattern
+
+- Enhanced review_prompt.md template
+  - Full Prompt Anatomy structure with context files, scope details, and reference sections
+  - Clearer guidance for review preparation
+
+### Changed
+
+- Refined material packing workflow in prep-review.md
+  - Restructured step 6 to emphasize piping directly into repomix without intermediate files
+  - Added explicit anti-patterns section with warnings
+  - Consolidated Mode A and Mode B examples with clearer command structure
+  - Renumbered workflow steps for better flow
+
+- Updated documentation inclusion rules
+  - Include architecture/tdd/prompts docs
+  - Exclude docs/reviews/ directory to prevent stale analysis from inflating token budget
+  - Exclude binary files by default
+
+### Fixed
+
+- Binary image syntax updated from underscore to backtick notation (_.png → *.png)
+
 ## [0.5.1] - 2025-03-05
 
 ### Changed
