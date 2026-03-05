@@ -53,6 +53,9 @@ pub trait Agent {
     /// `transform_*` method instead of using `file.raw` directly.
     ///
     /// Default implementation delegates to `content::transform::filter_agent_sections`.
+    /// The lint suppression is needed because Rust cannot trace calls through
+    /// dynamic trait dispatch at compile time.
+    #[allow(dead_code)]
     fn filter_content(&self, raw: &str) -> String {
         crate::content::transform::filter_agent_sections(raw, self.name())
     }

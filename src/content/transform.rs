@@ -14,6 +14,10 @@
 ///
 /// The filter is line-oriented and handles nested/stacked blocks correctly
 /// using a skip-depth counter.
+///
+/// `#[allow(dead_code)]` is needed because Rust cannot trace calls through
+/// dynamic trait dispatch (`Agent::filter_content` calls this at runtime).
+#[allow(dead_code)]
 pub fn filter_agent_sections(content: &str, agent_name: &str) -> String {
     let mut result = String::with_capacity(content.len());
     let mut skip_depth: usize = 0;
@@ -46,12 +50,14 @@ pub fn filter_agent_sections(content: &str, agent_name: &str) -> String {
     result
 }
 
+#[allow(dead_code)]
 fn parse_agent_start(line: &str) -> Option<&str> {
     // <!-- agent:NAME:start -->
     let inner = line.strip_prefix("<!-- agent:")?.strip_suffix(" -->")?;
     inner.strip_suffix(":start")
 }
 
+#[allow(dead_code)]
 fn parse_agent_end(line: &str) -> Option<&str> {
     // <!-- agent:NAME:end -->
     let inner = line.strip_prefix("<!-- agent:")?.strip_suffix(" -->")?;
