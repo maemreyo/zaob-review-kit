@@ -42,19 +42,24 @@ User says something like:
 
    ```markdown
    # Role Plan
+
    _Written before reading any file content. Based on diff --name-only only._
 
    ## Triggered roles
-   | # | Role | File / pattern that triggered it |
-   |---|------|----------------------------------|
+
+   | #   | Role | File / pattern that triggered it |
+   | --- | ---- | -------------------------------- |
 
    ## Execution order
+
    <!-- e.g.: 01-swe → 02-sa → 03-qa → 05-se → 99-verdict -->
 
    ## Additional roles (from review_prompt.md)
+
    <!-- Any user-specified extras and why -->
 
    ## Skipped roles (from review_prompt.md)
+
    <!-- Any suppressions and why -->
    ```
 
@@ -62,16 +67,18 @@ User says something like:
 
    ```markdown
    # File → Role Map
+
    _Fill while scanning diff content, one row per changed file._
 
    | File | Change type | Roles | Key observation |
-   |------|-------------|-------|-----------------|
+   | ---- | ----------- | ----- | --------------- |
    ```
 
    Write `.materials/$TS/temp/findings.md` (append during review execution):
 
    ```markdown
    # Running Findings Log
+
    _Append one entry per [BLOCKER] or [MAJOR] finding immediately after writing
    each role file. 99-verdict.md reads THIS file — not the individual role files —
    to synthesise without re-loading 60K+ tokens of role output._
@@ -153,68 +160,70 @@ User says something like:
    ### ⛔ Anti-patterns — never buffer through intermediate files
 
 <!-- agent:kiro:start -->
-   > **Kiro:** Both patterns below also hang Kiro's terminal tool.
-   > The heredoc (`cat > file << 'EOF'`) with 50+ lines freezes the terminal completely.
-   > Always pipe directly — never buffer file lists through temp files or heredocs.
+
+> **Kiro:** Both patterns below also hang Kiro's terminal tool.
+> The heredoc (`cat > file << 'EOF'`) with 50+ lines freezes the terminal completely.
+> Always pipe directly — never buffer file lists through temp files or heredocs.
+
 <!-- agent:kiro:end -->
 
-   ```bash
-   # ❌ NEVER do this — heredoc with many lines; hangs terminal-based agents
-   cat > .materials/$TS/temp/file-list.txt << 'EOF'
-   src/auth/handler.rs
-   migrations/001.sql
-   ... (50 more lines)
-   EOF
+```bash
+# ❌ NEVER do this — heredoc with many lines; hangs terminal-based agents
+cat > .materials/$TS/temp/file-list.txt << 'EOF'
+src/auth/handler.rs
+migrations/001.sql
+... (50 more lines)
+EOF
 
-   # ❌ NEVER do this — writing the list to a file then reading it back is pointless
-   git diff ... --name-only > /tmp/files.txt
-   repomix --include "$(cat /tmp/files.txt | tr '\n' ',')" ...
-   ```
+# ❌ NEVER do this — writing the list to a file then reading it back is pointless
+git diff ... --name-only > /tmp/files.txt
+repomix --include "$(cat /tmp/files.txt | tr '\n' ',')" ...
+```
 
-   ### ✅ Always pipe directly — one command, no intermediate files
+### ✅ Always pipe directly — one command, no intermediate files
 
-   **Mode A — X commits:**
+**Mode A — X commits:**
 
-   ```bash
-   # Source files only (fastest, default)
-   git diff HEAD~<N>..HEAD --name-only | repomix --stdin \
-     --include-diffs \
-     --include-logs-count <N> \
-     --style xml \
-     --output .materials/$TS/review_context.xml
+```bash
+# Source files only (fastest, default)
+git diff HEAD~<N>..HEAD --name-only | repomix --stdin \
+  --include-diffs \
+  --include-logs-count <N> \
+  --style xml \
+  --output .materials/$TS/review_context.xml
 
-   # Source files + architecture docs (recommended for feature PRs)
-   { git diff HEAD~<N>..HEAD --name-only; \
-     find docs/ -name "*.md" ! -path "*/reviews/*" 2>/dev/null; \
-     test -f README.md && echo README.md; } | sort -u | \
-   repomix --stdin \
-     --include-diffs \
-     --include-logs-count <N> \
-     --style xml \
-     --output .materials/$TS/review_context.xml
-   ```
+# Source files + architecture docs (recommended for feature PRs)
+{ git diff HEAD~<N>..HEAD --name-only; \
+  find docs/ -name "*.md" ! -path "*/reviews/*" 2>/dev/null; \
+  test -f README.md && echo README.md; } | sort -u | \
+repomix --stdin \
+  --include-diffs \
+  --include-logs-count <N> \
+  --style xml \
+  --output .materials/$TS/review_context.xml
+```
 
-   **Mode B — content/topic:**
+**Mode B — content/topic:**
 
-   ```bash
-   { rg -l "<keyword>" src/; \
-     find docs/ -name "*.md" ! -path "*/reviews/*" 2>/dev/null; } | sort -u | \
-   repomix --stdin \
-     --style xml \
-     --output .materials/$TS/review_context.xml
-   ```
+```bash
+{ rg -l "<keyword>" src/; \
+  find docs/ -name "*.md" ! -path "*/reviews/*" 2>/dev/null; } | sort -u | \
+repomix --stdin \
+  --style xml \
+  --output .materials/$TS/review_context.xml
+```
 
-   ### Documentation inclusion rules
+### Documentation inclusion rules
 
-   When adding docs to the pipeline:
+When adding docs to the pipeline:
 
-   - ✅ Include: `docs/architecture/`, `docs/tdd/`, `docs/prompts/`, `README.md`, `AGENTS.md`, `CLAUDE.md`
-   - ❌ Exclude: `docs/reviews/` — previous review outputs inflate token budget with stale analysis
-   - ❌ Exclude: binary files (`*.png`, `*.drawio`) unless specifically asked
+- ✅ Include: `docs/architecture/`, `docs/tdd/`, `docs/prompts/`, `README.md`, `AGENTS.md`, `CLAUDE.md`
+- ❌ Exclude: `docs/reviews/` — previous review outputs inflate token budget with stale analysis
+- ❌ Exclude: binary files (`*.png`, `*.drawio`) unless specifically asked
 
-   The shell pattern `! -path "*/reviews/*"` handles this automatically.
+The shell pattern `! -path "*/reviews/*"` handles this automatically.
 
-   Do **not** add `--compress` unless the user asks. See `pack-materials.md`.
+Do **not** add `--compress` unless the user asks. See `pack-materials.md`.
 
 7. **Save patch** (Mode A only):
 
@@ -236,19 +245,24 @@ User says something like:
    **Effort**: <[x/5] — decide from total files changed and complexity>
 
    ## What Changed
+
    <!-- One paragraph: what changed and why -->
 
    ## File Walkthrough
+
    <!-- Copy from temp/file-map.md and expand the Notes column -->
+
    | File | Change type | What changed | Notes |
-   |------|-------------|--------------|-------|
+   | ---- | ----------- | ------------ | ----- |
 
    ## Risk Assessment
+
    **Level**: <Low / Medium / High>
    **Justification**: <!-- one sentence -->
    **Review Effort**: <[x/5] — see review-prompting.md §Review Effort scale>
 
    ## Review Files
+
    <!-- Table of contents — fill in after all role files are written -->
    ```
 
@@ -260,9 +274,11 @@ User says something like:
    # Verdict
 
    ## Suggested Tests
+
    <!-- Use format from review-prompting.md §Suggested Tests Format -->
 
    ## Prioritised Recommendations
+
    <!-- Synthesised from temp/findings.md — do not re-read individual role files -->
 
    ### Blockers (fix before merge)
@@ -272,107 +288,171 @@ User says something like:
    ### Suggestions (optional)
 
    ## Final Verdict
+
    <!-- Ship / Ship with changes / Needs rework / Needs discussion -->
 
    ---
-   *AI-generated review — human sign-off required for any [BLOCKER] or [MAJOR] finding.*
+
+   _AI-generated review — human sign-off required for any [BLOCKER] or [MAJOR] finding._
    ```
 
 9. **Generate review_prompt.md** — Write a structured prompt following the Prompt Anatomy.
    Fill in all `<placeholder>` values from the actual scope:
 
-    ```markdown
-    # Code Review Request
+   ```markdown
+   # Code Review Request
 
-    I want you to perform a structured multi-role code review so that every
-    significant risk — correctness, security, architecture, performance — is
-    surfaced with actionable findings before this code is merged.
+   I want you to perform a structured multi-role code review so that every
+   significant risk — correctness, security, architecture, performance — is
+   surfaced with actionable findings before this code is merged.
 
-    ## Context Files
+   ## Context Files
 
-    Read these files completely before responding:
-    - `review_context.xml` — full source and git diff for the scope below
-    - `review-prompting.md` — output structure, role protocol, severity labels
-    - `review-roles.md` — which roles to activate and their trigger conditions
-    - `temp/role-plan.md` — pre-decided execution plan (read this first)
-    - `temp/file-map.md` — file-to-role mapping built during prep
-    - `temp/findings.md` — append every [BLOCKER] and [MAJOR] here as you go
+   Read these files completely before responding:
 
-    ## Scope
+   - `review_context.xml` — full source and git diff for the scope below
+   - `role_standards_bundle.md` — checklists for every activated role; read one
+     section at a time (sequential read-write-proceed, never all at once)
+   - `review-prompting.md` — output structure, role protocol, severity labels
+   - `review-roles.md` — which roles to activate and their trigger conditions
+   - `temp/role-plan.md` — pre-decided execution plan (read this first)
+   - `temp/file-map.md` — file-to-role mapping built during prep
+   - `temp/findings.md` — append every [BLOCKER] and [MAJOR] here as you go
 
-    **Commits**: last <N> commits — <brief description of what changed>
-    **Date**: <today>
-    **Output directory**: `reports/`
+   ## Scope
 
-    ## Reference: What a Good Review Looks Like
+   **Commits**: last <N> commits — <brief description of what changed>
+   **Date**: <today>
+   **Output directory**: `reports/`
 
-    Always:
-    - Cite specific file paths and line numbers for every finding
-    - Complete the sequential read-write-proceed pattern (one role at a time)
-    - Append to `temp/findings.md` immediately after writing each role file
-    - Write 99-verdict.md by reading `temp/findings.md` only — never re-read role files
+   ## Reference: What a Good Review Looks Like
 
-    Never:
-    - Pre-load all role standards at once — load one, write the role file, proceed
-    - Skip the 00-summary.md or 99-verdict.md bookend files
-    - Leave a finding without a severity label ([BLOCKER] / [MAJOR] / [SUGGESTION] / [NIT])
+   Always:
 
-    ## Success Brief
+   - Cite specific file paths and line numbers for every finding
+   - Complete the sequential read-write-proceed pattern (one role at a time)
+   - Append to `temp/findings.md` immediately after writing each role file
+   - Write 99-verdict.md by reading `temp/findings.md` only — never re-read role files
 
-    **Output**: Multiple Markdown files in `reports/` (00-summary, role files, 99-verdict)
-    **Success means**: Author can act on every [BLOCKER] and [MAJOR] immediately —
-    each finding has a file path, line number, explanation, and suggested fix
-    **Does NOT sound like**: vague AI filler, generic advice without code references,
-    or a summary-only verdict that skips individual role perspectives
+   Never:
 
-    ## Rules
+   - Pre-load all role standards at once — read one section from the bundle,
+     write the role file, proceed to the next section
+   - Skip the 00-summary.md or 99-verdict.md bookend files
+   - Leave a finding without a severity label ([BLOCKER] / [MAJOR] / [SUGGESTION] / [NIT])
 
-    `review-prompting.md` contains the complete standards, severity labels, verdict
-    scale, and role-loading protocol. Read it before starting. If you are about to
-    skip a required step (e.g., omit temp/findings.md, merge roles, skip the plan),
-    stop and tell me instead.
+   ## Success Brief
 
-    ## Specific Questions
+   **Output**: Multiple Markdown files in `reports/` (00-summary, role files, 99-verdict)
+   **Success means**: Author can act on every [BLOCKER] and [MAJOR] immediately —
+   each finding has a file path, line number, explanation, and suggested fix
+   **Does NOT sound like**: vague AI filler, generic advice without code references,
+   or a summary-only verdict that skips individual role perspectives
 
-    <paste any user-specified questions or focus areas here>
+   ## Rules
 
-    ## Additional Roles
-    <!-- Activate roles beyond auto-triggered defaults (see review-roles.md)   -->
-    <!-- Available: pe, se, oe, de, ux, cl, ceo, da, mle, api, finops, dx     -->
-    <!-- Example: - mle   (this PR integrates an LLM API)                      -->
-    <!-- Example: - finops (new cloud resources provisioned)                   -->
+   `review-prompting.md` contains the complete standards, severity labels, verdict
+   scale, and role-loading protocol. Read it before starting. If you are about to
+   skip a required step (e.g., omit temp/findings.md, merge roles, skip the plan),
+   stop and tell me instead.
 
-    ## Skip Roles
-    <!-- Suppress auto-triggered roles that are not relevant for this scope    -->
-    <!-- Example: - ceo   (internal refactor only, no user-visible impact)     -->
+   ## Specific Questions
 
-    ## Plan Before Executing
+   <paste any user-specified questions or focus areas here>
 
-    Before writing any review output, state:
-    1. The 3 rules from `review-prompting.md` that matter most for this scope
-    2. Your role execution order (e.g. 01-swe → 02-sa → 03-qa → 05-se → 99-verdict)
+   ## Additional Roles
 
-    Only begin executing once you have written the plan above.
+   <!-- Activate roles beyond auto-triggered defaults (see review-roles.md)   -->
+   <!-- Available: pe, se, oe, de, ux, cl, ceo, da, mle, api, finops, dx     -->
+   <!-- Example: - mle   (this PR integrates an LLM API)                      -->
+   <!-- Example: - finops (new cloud resources provisioned)                   -->
+
+   ## Skip Roles
+
+   <!-- Suppress auto-triggered roles that are not relevant for this scope    -->
+   <!-- Example: - ceo   (internal refactor only, no user-visible impact)     -->
+
+   ## Plan Before Executing
+
+   Before writing any review output, state:
+
+   1. The 3 rules from `review-prompting.md` that matter most for this scope
+   2. Your role execution order (e.g. 01-swe → 02-sa → 03-qa → 05-se → 99-verdict)
+
+   Only begin executing once you have written the plan above.
+   ```
+
+   Save to `.materials/$TS/review_prompt.md`
+
+10. **Bundle role standards for Claude.ai upload**
+
+    Claude.ai has no access to local `.kiro/steering/role-standards/` files.
+    Bundle the standards needed for this review into a single uploadable file.
+
+    Read `temp/role-plan.md` to get the execution order, then bundle only the
+    triggered roles — always include the three core roles (swe, sa, qa) plus
+    every triggered role from the plan:
+
+    ```bash
+    STANDARDS_DIR=".kiro/steering/role-standards"
+    OUT=".materials/$TS/role_standards_bundle.md"
+
+    # Always-present core roles
+    ROLES="00-loading-guide 01-swe-standard 02-sa-standard 03-qa-standard"
+
+    # Add triggered roles from temp/role-plan.md
+    # Example: if plan shows 05-se and 07-de are triggered:
+    # ROLES="$ROLES 05-se-standard 07-de-standard"
+
+    printf '' > "$OUT"
+    for role in $ROLES; do
+      FILE="$STANDARDS_DIR/${role}.md"
+      if [ -f "$FILE" ]; then
+        echo "---" >> "$OUT"
+        cat "$FILE" >> "$OUT"
+        echo "" >> "$OUT"
+      fi
+    done
     ```
 
-    Save to `.materials/$TS/review_prompt.md`
+    **Why bundle, not copy individual files?**
+    Claude.ai has a per-session file upload limit. One bundled file uses one
+    upload slot regardless of how many roles are active. The `---` separators
+    between role sections are enough for Claude to distinguish them; headers
+    inside each standard already carry the role name.
 
-10. **Report to user**
+    **Fallback — bundle all standards (when unsure which will be triggered):**
+
+    ```bash
+    cat .kiro/steering/role-standards/*.md \
+      | awk 'FNR==1{print "---"}1' \
+      > .materials/$TS/role_standards_bundle.md
+    ```
+
+    This is heavier (~60K tokens) but guarantees nothing is missing. Use the
+    targeted bundle when the triggered role set is clear from the file names.
+
+11. **Report to user**
 
 ```
 ✓ Materials ready in .materials/<TS>/
-  - review_context.xml      (<size>, ~<tokens> tokens)
+  - review_context.xml          (<size>, ~<tokens> tokens)
+  - role_standards_bundle.md    (<size>, ~<tokens> tokens)
   - review_prompt.md
-  - review.patch            (Mode A only)
+  - review.patch                (Mode A only)
   - reports/
-      00-summary.md         ← stub pre-scaffolded, fill in
-      99-verdict.md         ← stub pre-scaffolded, fill in
+      00-summary.md             ← stub pre-scaffolded, fill in
+      99-verdict.md             ← stub pre-scaffolded, fill in
   - temp/
-      role-plan.md          ← DONE: roles decided from file names
-      file-map.md           ← DONE: file → role mapping complete
-      findings.md           ← append findings here during review
+      role-plan.md              ← DONE: roles decided from file names
+      file-map.md               ← DONE: file → role mapping complete
+      findings.md               ← append findings here during review
 
-Upload review_context.xml + review_prompt.md to Claude.ai.
+Upload order to Claude.ai:
+  1. review_context.xml
+  2. role_standards_bundle.md
+  3. Paste review_prompt.md as your message
+
 Finished review files land in reports/ — copy to project reports/ when done.
 ```
 
@@ -381,6 +461,7 @@ Finished review files land in reports/ — copy to project reports/ when done.
 ## Output
 
 - `.materials/<timestamp>/review_context.xml` — generated by repomix
+- `.materials/<timestamp>/role_standards_bundle.md` — role checklists for Claude.ai
 - `.materials/<timestamp>/review_prompt.md`
 - `.materials/<timestamp>/review.patch` (commit mode only)
 - `.materials/<timestamp>/reports/` — all review output files
