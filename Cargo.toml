@@ -1,6 +1,6 @@
 [package]
 name = "zrk"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 description = "Install review workflow files into AI coding agent config directories"
 license = "MIT"

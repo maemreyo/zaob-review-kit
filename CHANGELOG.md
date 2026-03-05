@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2025-03-05
+
+### Changed
+
+- Refined prep-review.md workflow documentation
+  - Restructured markdown formatting for consistency
+  - Clarified file-map.md population strategy (fill row-by-row during prep, not batched at end)
+  - Added explicit guidance on when and how to populate temp/file-map.md during file reading
+  - Emphasized that File Walkthrough table should be sourced from temp/file-map.md
+  - Updated risk and effort field formatting with angle brackets for clarity
+
+### Added
+
+- Implemented KiroInclusion enum for steering file loading modes
+  - Categorizes files as Always, Auto, or Manual inclusion
+  - Comprehensive documentation for Kiro inclusion strategy with design rationale
+  - Improved agent context management by distinguishing between loading modes
+
 ## [0.5.0] - 2025-03-05
 
 ### Added
