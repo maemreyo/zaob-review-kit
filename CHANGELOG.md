@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2025-03-05
+
+### Changed
+
+- Standardized markdown formatting across documentation
+  - Normalized table formatting with consistent spacing and alignment
+  - Added blank lines between sections for improved readability
+  - Reformatted code blocks and nested lists with proper indentation
+  - Updated emphasis styling from bold to italic for agent notes
+  - Improved visual hierarchy in anti-patterns section
+  - Consistent bullet formatting in documentation inclusion rules
+
+### Fixed
+
+- Added dead_code suppressions for dynamic trait dispatch
+  - Suppressed warnings for filter_agent_sections, parse_agent_start, parse_agent_end functions
+  - Suppressed warning for filter_content trait method
+  - Added documentation explaining Rust cannot trace calls through dynamic trait dispatch at compile time
+
 ## [0.5.2] - 2025-03-05
 
 ### Added
