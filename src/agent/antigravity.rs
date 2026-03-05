@@ -15,7 +15,9 @@ pub struct Antigravity {
 
 impl Antigravity {
     pub fn new() -> Self {
-        Self { home: HomeResolver::new() }
+        Self {
+            home: HomeResolver::new(),
+        }
     }
 }
 
@@ -41,9 +43,12 @@ impl Agent for Antigravity {
     }
 
     fn is_workflow_file(&self, name: &str) -> bool {
-        // review-checklist.md stays in .agent/rules/ (it supports any workflow,
-        // not a runnable workflow itself — belongs with the other review-* rules).
-        matches!(name, "prep-review.md" | "pack-materials.md" | "project-context.md")
+        // review-checklist.md and review-best-practices.md stay in .agent/rules/
+        // (reference docs, not runnable workflows — belong with the other review-* rules).
+        matches!(
+            name,
+            "prep-review.md" | "pack-materials.md" | "project-context.md"
+        )
     }
 
     fn transform_global(&self, file: &ContentFile) -> TransformOutput {
@@ -142,5 +147,7 @@ mod tests {
         assert!(a.is_workflow_file("project-context.md"));
         assert!(!a.is_workflow_file("review-roles.md"));
         assert!(!a.is_workflow_file("review-memory.md"));
+        assert!(!a.is_workflow_file("review-checklist.md"));
+        assert!(!a.is_workflow_file("review-best-practices.md"));
     }
 }

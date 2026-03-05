@@ -15,6 +15,11 @@ Before uploading materials to Claude.ai, verify:
 - [ ] `project-context.md` has real content (not just empty scaffold)
 - [ ] If `review_memory.md` exists — was it read before this review?
 - [ ] Specific questions added to prompt (not just generic focus areas)
+- [ ] Entry-point / composition file included if prompt asks about
+      middleware ordering, routing, or module wiring
+- [ ] If diff touches queries or auth logic: verify query/logic bodies are
+      readable in the context — not stripped by compression
+- [ ] `--compress` was **not** added unless user explicitly requested it
 
 ## Scope Accuracy
 

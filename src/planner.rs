@@ -48,7 +48,12 @@ pub enum InstallAction {
 
 /// Plan workspace file installation for an agent.
 /// `scaffold_context`: when false, project-context.md is excluded from the plan.
-pub fn plan_install(agent: &dyn Agent, cwd: &Path, force: bool, scaffold_context: bool) -> Vec<InstallAction> {
+pub fn plan_install(
+    agent: &dyn Agent,
+    cwd: &Path,
+    force: bool,
+    scaffold_context: bool,
+) -> Vec<InstallAction> {
     let workspace_dir = agent.workspace_dir(cwd);
     let workflow_dir = agent.workflow_dir(cwd);
     let workspace_files: Vec<_> = content::by_scope(ContentScope::Workspace)
@@ -58,9 +63,13 @@ pub fn plan_install(agent: &dyn Agent, cwd: &Path, force: bool, scaffold_context
     let consolidates = agent.consolidates_to_single_file();
     let mut actions = Vec::new();
 
-    actions.push(InstallAction::CreateDir { path: workspace_dir.clone() });
+    actions.push(InstallAction::CreateDir {
+        path: workspace_dir.clone(),
+    });
     if let Some(ref wf_dir) = workflow_dir {
-        actions.push(InstallAction::CreateDir { path: wf_dir.clone() });
+        actions.push(InstallAction::CreateDir {
+            path: wf_dir.clone(),
+        });
     }
 
     for file in &workspace_files {
@@ -119,8 +128,9 @@ pub fn plan_install_global(agent: &dyn Agent, force: bool) -> Vec<InstallAction>
             // Pre-compute: how many source files map to each output filename.
             // Files whose output filename appears more than once use AppendToFile
             // (e.g. Antigravity maps all 6 global files to GEMINI.md).
-            let filename_counts: std::collections::HashMap<String, usize> =
-                global_files.iter().fold(std::collections::HashMap::new(), |mut m, f| {
+            let filename_counts: std::collections::HashMap<String, usize> = global_files
+                .iter()
+                .fold(std::collections::HashMap::new(), |mut m, f| {
                     *m.entry(agent.transform_global(f).filename).or_insert(0) += 1;
                     m
                 });
@@ -128,7 +138,8 @@ pub fn plan_install_global(agent: &dyn Agent, force: bool) -> Vec<InstallAction>
             for file in &global_files {
                 let output = agent.transform_global(file);
                 let dest = global_dir.join(&output.filename);
-                let is_consolidated = filename_counts.get(&output.filename).copied().unwrap_or(0) > 1;
+                let is_consolidated =
+                    filename_counts.get(&output.filename).copied().unwrap_or(0) > 1;
 
                 if is_consolidated {
                     let section = file.name.trim_end_matches(".md").to_string();
@@ -211,8 +222,8 @@ pub fn plan_install_all(agent: &dyn Agent, cwd: &Path, force: bool) -> Vec<Insta
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::kiro::Kiro;
     use crate::agent::cursor::Cursor;
+    use crate::agent::kiro::Kiro;
     use std::path::PathBuf;
 
     #[test]
@@ -224,12 +235,17 @@ mod tests {
         // First action should be CreateDir
         assert!(matches!(&actions[0], InstallAction::CreateDir { .. }));
 
-        // Should have 4 WriteFile actions (workspace has 4 files)
-        let write_count = actions.iter().filter(|a| matches!(a, InstallAction::WriteFile { .. })).count();
-        assert_eq!(write_count, 4);
+        // Should have 5 WriteFile actions (workspace has 5 files)
+        let write_count = actions
+            .iter()
+            .filter(|a| matches!(a, InstallAction::WriteFile { .. }))
+            .count();
+        assert_eq!(write_count, 5);
 
         // Should have a WriteManifest
-        assert!(actions.iter().any(|a| matches!(a, InstallAction::WriteManifest { .. })));
+        assert!(actions
+            .iter()
+            .any(|a| matches!(a, InstallAction::WriteManifest { .. })));
     }
 
     #[test]
@@ -237,7 +253,10 @@ mod tests {
         let cursor = Cursor::new();
         let actions = plan_install_global(&cursor, false);
 
-        let manual_count = actions.iter().filter(|a| matches!(a, InstallAction::ManualInstruction { .. })).count();
+        let manual_count = actions
+            .iter()
+            .filter(|a| matches!(a, InstallAction::ManualInstruction { .. }))
+            .count();
         assert_eq!(manual_count, 6); // 6 global files
     }
 
@@ -247,7 +266,10 @@ mod tests {
         kiro.home.override_path = Some(PathBuf::from("/fake/home"));
         let actions = plan_install_global(&kiro, false);
 
-        let write_count = actions.iter().filter(|a| matches!(a, InstallAction::WriteFile { .. })).count();
+        let write_count = actions
+            .iter()
+            .filter(|a| matches!(a, InstallAction::WriteFile { .. }))
+            .count();
         assert_eq!(write_count, 6); // 6 global files
     }
 
@@ -272,11 +294,17 @@ mod tests {
         let actions = plan_install_all(&kiro, cwd, false);
 
         // Should have actions from workspace, global, and templates
-        let create_dir_count = actions.iter().filter(|a| matches!(a, InstallAction::CreateDir { .. })).count();
+        let create_dir_count = actions
+            .iter()
+            .filter(|a| matches!(a, InstallAction::CreateDir { .. }))
+            .count();
         assert!(create_dir_count >= 2); // workspace dir + global dir
 
-        let write_count = actions.iter().filter(|a| matches!(a, InstallAction::WriteFile { .. })).count();
-        assert_eq!(write_count, 10); // 4 workspace + 6 global
+        let write_count = actions
+            .iter()
+            .filter(|a| matches!(a, InstallAction::WriteFile { .. }))
+            .count();
+        assert_eq!(write_count, 11); // 5 workspace + 6 global
     }
 
     #[test]
@@ -285,13 +313,16 @@ mod tests {
         let trae = Trae::new();
         let actions = plan_install(&trae, Path::new("/fake/project"), false, true);
 
-        let append_count = actions.iter()
+        let append_count = actions
+            .iter()
             .filter(|a| matches!(a, InstallAction::AppendToFile { .. }))
             .count();
-        assert_eq!(append_count, 4); // 4 workspace files, all consolidated
+        assert_eq!(append_count, 5); // 5 workspace files, all consolidated
 
         // No WriteFile should be emitted for consolidating agents
-        assert!(!actions.iter().any(|a| matches!(a, InstallAction::WriteFile { .. })));
+        assert!(!actions
+            .iter()
+            .any(|a| matches!(a, InstallAction::WriteFile { .. })));
     }
 
     #[test]
@@ -302,18 +333,40 @@ mod tests {
         let actions = plan_install(&a, cwd, false, true);
 
         // Workflow files must land in .agent/workflows/
-        let workflow_writes: Vec<_> = actions.iter()
-            .filter_map(|a| if let InstallAction::WriteFile { path, .. } = a { Some(path) } else { None })
+        let workflow_writes: Vec<_> = actions
+            .iter()
+            .filter_map(|a| {
+                if let InstallAction::WriteFile { path, .. } = a {
+                    Some(path)
+                } else {
+                    None
+                }
+            })
             .filter(|p| p.components().any(|c| c.as_os_str() == "workflows"))
             .collect();
-        assert_eq!(workflow_writes.len(), 3, "prep-review, pack-materials, project-context → workflows/");
+        assert_eq!(
+            workflow_writes.len(),
+            3,
+            "prep-review, pack-materials, project-context → workflows/"
+        );
 
         // Non-workflow files must land in .agent/rules/
-        let rules_writes: Vec<_> = actions.iter()
-            .filter_map(|a| if let InstallAction::WriteFile { path, .. } = a { Some(path) } else { None })
+        let rules_writes: Vec<_> = actions
+            .iter()
+            .filter_map(|a| {
+                if let InstallAction::WriteFile { path, .. } = a {
+                    Some(path)
+                } else {
+                    None
+                }
+            })
             .filter(|p| p.components().any(|c| c.as_os_str() == "rules"))
             .collect();
-        assert_eq!(rules_writes.len(), 1, "review-checklist.md → rules/");
+        assert_eq!(
+            rules_writes.len(),
+            2,
+            "review-checklist.md, review-best-practices.md → rules/"
+        );
     }
 
     #[test]
@@ -323,15 +376,21 @@ mod tests {
         let actions = plan_install(&kiro, cwd, false, false);
 
         let has_project_context = actions.iter().any(|a| match a {
-            InstallAction::WriteFile { path, .. } => {
-                path.file_name().map_or(false, |n| n == "project-context.md")
-            }
+            InstallAction::WriteFile { path, .. } => path
+                .file_name()
+                .map_or(false, |n| n == "project-context.md"),
             _ => false,
         });
-        assert!(!has_project_context, "project-context.md must be excluded when scaffold_context=false");
+        assert!(
+            !has_project_context,
+            "project-context.md must be excluded when scaffold_context=false"
+        );
 
         // Other workspace files must still be present
-        let write_count = actions.iter().filter(|a| matches!(a, InstallAction::WriteFile { .. })).count();
-        assert_eq!(write_count, 3); // 4 workspace - 1 skipped
+        let write_count = actions
+            .iter()
+            .filter(|a| matches!(a, InstallAction::WriteFile { .. }))
+            .count();
+        assert_eq!(write_count, 4); // 5 workspace - 1 skipped
     }
 }

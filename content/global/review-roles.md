@@ -35,6 +35,18 @@ When reviewing code, adopt these perspectives sequentially:
 - Blocking operations in async contexts
 - (Detail: see review-performance.md)
 
+## Operations Engineer (OE)
+
+The question this role answers: _"If this breaks at 3am, can the on-call engineer diagnose and recover without the author?"_
+
+- **Observability**: Are errors, latency, and key business events logged at the right level? Can a stranger read the logs and understand what happened?
+- **Rollback safety**: Can this change be reverted independently? Does it include a migration with no easy down-path?
+- **Failure modes**: What happens when a downstream dependency is down or slow? Are timeouts and circuit breakers in place?
+- **On-call impact**: Does this add new alert surface? Does it change existing alert thresholds without updating the runbook?
+- **Configuration drift**: Are new environment variables or config keys documented? Can the service start with missing config, or will it crash silently?
+
+Trigger: new endpoints, background jobs, schema migrations, changes to retry/timeout logic, new external dependencies.
+
 ## Chief Executive Officer (CEO)
 
 - Does this feature solve the right problem?

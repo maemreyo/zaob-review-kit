@@ -70,6 +70,11 @@ pub fn all_content() -> Vec<ContentFile> {
             scope: ContentScope::Workspace,
             raw: include_str!("../../content/workspace/review-checklist.md"),
         },
+        ContentFile {
+            name: "review-best-practices.md".into(),
+            scope: ContentScope::Workspace,
+            raw: include_str!("../../content/workspace/review-best-practices.md"),
+        },
         // Templates
         ContentFile {
             name: "archignore".into(),
@@ -97,8 +102,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn all_content_returns_12_files() {
-        assert_eq!(all_content().len(), 12);
+    fn all_content_returns_13_files() {
+        assert_eq!(all_content().len(), 13);
     }
 
     #[test]
@@ -107,8 +112,8 @@ mod tests {
     }
 
     #[test]
-    fn by_scope_workspace_returns_4() {
-        assert_eq!(by_scope(ContentScope::Workspace).len(), 4);
+    fn by_scope_workspace_returns_5() {
+        assert_eq!(by_scope(ContentScope::Workspace).len(), 5);
     }
 
     #[test]

@@ -5,48 +5,124 @@ Prepare review materials for uploading to Claude.ai.
 ## Trigger
 
 User says something like:
+
 - "tạo materials để review 3 commit gần nhất"
 - "prep review for the last commit"
 - "pack the auth changes for review"
+- "tạo materials liên quan tới phase 0"
+- "pack everything related to authentication"
+
+---
 
 ## Steps
 
-1. **Identify scope** — Determine which commits or files to review
+0. **Author self-review first** — Before packaging anything for an AI or peer
+   reviewer, read your own diff as if you were the reviewer:
+
    ```bash
-   git log --oneline -<N>                    # see commit SHAs
-   git diff HEAD~<N>..HEAD --name-only       # list changed files
+   git diff HEAD~<N>..HEAD   # or: git diff main...your-branch
    ```
 
-2. **Resolve context** — Find direct imports of changed files (one level deep)
+   Check for obvious issues: forgotten debug code, missing error handling,
+   TODOs that were meant to be resolved, tests that only pass trivially.
+   Self-review catches the easy stuff so the actual review focuses on what matters.
 
-3. **Apply ignore rules** — Filter out files matching:
+1. **Identify scope** — Two common modes:
+
+   **Mode A — X latest commits:**
+
+   ```bash
+   git log --oneline -<N>              # confirm scope
+   git diff HEAD~<N>..HEAD --name-only # list changed files
+   ```
+
+   **Mode B — Content related to Y** (feature, phase, module name):
+
+   ```bash
+   # Find all files that mention the topic (respects .gitignore)
+   rg -l "phase.0\|Phase 0\|phase_0" --type-not sql   # example: phase 0
+   rg -l "auth\|login\|jwt" src/                       # example: auth
+   rg -l "student" migrations/ eduos-core/ eduos-api/  # example: module name
+   ```
+
+   `rg -l` (ripgrep `--files-with-matches`) returns only filenames, one per line —
+   ready to pipe straight into repomix. Install: `brew install ripgrep` / `apt install ripgrep`.
+
+2. **Resolve context** — Expand the file list with direct imports and caller files
+   (one level deep in each direction):
+
+   ```bash
+   # Forward: what does the changed file import?
+   grep -E "^use |^mod |^import |^from |^require" <file> | head -20
+
+   # Reverse: what imports this file? (composition layer)
+   rg -l "mod students|use.*routes.*students" src/
+   ```
+
+   Common patterns:
+   - Routes changed → include the router composition file (`src/lib.rs`, `app.rs`, `main.rs`)
+   - Models changed → include the lib re-export file
+   - Services changed → include the handler that calls them
+
+3. **Check token budget** — Before packing, run repomix's built-in token visualizer
+   on the candidate file list to see if it fits:
+
+   ```bash
+   # Commit-based — pipe git file list
+   git diff HEAD~<N>..HEAD --name-only | repomix --stdin --token-count-tree
+
+   # Content-based — pipe rg file list
+   rg -l "phase 0" | repomix --stdin --token-count-tree
+   ```
+
+   Target: **< 100K tokens** for Claude.ai. If over, narrow the list before packing
+   (drop test files or large auto-generated files first).
+
+4. **Apply ignore rules** — Filter out files matching:
    - `.archignore`
    - `.repomixignore` (if present)
    - patterns from `review-ignore.md`
 
-4. **Create timestamp dir**
+5. **Create timestamp dir**
+
    ```bash
    TS=$(date +%Y%m%d-%H%M%S)
    mkdir -p .materials/$TS
    ```
 
-5. **Generate review_context.xml** using repomix (see `pack-materials.md`)
+6. **Generate review_context.xml** — use `--stdin` to pass the file list.
+   See `pack-materials.md` for the full command reference.
+
+   **Mode A — commits:**
+
    ```bash
-   repomix \
-     --include "<changed-files + direct-imports>" \
+   git diff HEAD~<N>..HEAD --name-only | repomix --stdin \
      --include-diffs \
      --include-logs-count <N> \
+     --include-full-directory-structure \
      --style xml \
-     --compress \
      --output .materials/$TS/review_context.xml
    ```
 
-6. **Save patch**
+   **Mode B — content/topic:**
+
+   ```bash
+   rg -l "<keyword>" | repomix --stdin \
+     --include-full-directory-structure \
+     --style xml \
+     --output .materials/$TS/review_context.xml
+   ```
+
+   Do **not** add `--compress` unless the user asks. See `pack-materials.md`.
+
+7. **Save patch** (Mode A only):
+
    ```bash
    git diff HEAD~<N>..HEAD > .materials/$TS/review.patch
    ```
 
-7. **Generate review_prompt.md** — Write a structured prompt:
+8. **Generate review_prompt.md** — Write a structured prompt:
+
    ```markdown
    # Code Review Request
 
@@ -55,22 +131,26 @@ User says something like:
    **Context file**: review_context.xml
 
    ## Focus areas
+
    - Correctness of logic
    - Edge cases and error handling
    - Code clarity and maintainability
    - Security concerns (if applicable)
 
    ## Specific questions
+
    <any specific questions the user mentioned>
    ```
+
    Save to `.materials/$TS/review_prompt.md`
 
-8. **Report to user**
+9. **Report to user**
+
    ```
    ✓ Materials ready in .materials/<TS>/
      - review_context.xml  (<size>, ~<tokens> tokens)
      - review_prompt.md
-     - review.patch
+     - review.patch        (Mode A only)
 
    Upload review_context.xml to Claude.ai, then paste review_prompt.md.
    ```
@@ -79,4 +159,4 @@ User says something like:
 
 - `.materials/<timestamp>/review_context.xml` — generated by repomix
 - `.materials/<timestamp>/review_prompt.md`
-- `.materials/<timestamp>/review.patch`
+- `.materials/<timestamp>/review.patch` (commit mode only)
