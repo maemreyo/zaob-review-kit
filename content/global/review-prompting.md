@@ -24,15 +24,19 @@ dilutes attention and degrades review quality ("lost in the middle" effect).
 For each activated role (in order 01 → 15):
   1. READ  role-standards/<NN>-<role>-standard.md
   2. APPLY its checklist to the diff
-  3. WRITE <NN>-<role>-review.md with findings
-  4. PROCEED to next role (do not re-read the standard)
+  3. WRITE reports/<NN>-<role>-review.md with findings
+  4. APPEND every [BLOCKER] and [MAJOR] to temp/findings.md (one line each)
+  5. PROCEED to next role (do not re-read the standard)
 
 After all role files are written:
-  5. WRITE 99-verdict.md synthesising across all role outputs
+  6. READ  temp/findings.md (compressed log — not the individual role files)
+  7. WRITE reports/99-verdict.md synthesising from that log
+  8. FILL IN reports/00-summary.md table of contents and risk assessment
 ```
 
 This keeps each role sharp — maximum ~5K tokens of checklist active at a time
-instead of 60K+ for all standards simultaneously.
+instead of 60K+ for all standards simultaneously. The `temp/findings.md` log
+means verdict synthesis reads one small file rather than re-loading all role output.
 
 **User-specified roles:**
 
@@ -183,36 +187,125 @@ See also [Security Engineer Review](05-se-review.md) for authentication concerns
 
 ```
 .materials/20250115-143022/
-├── 00-summary.md
-├── 01-swe-review.md
-├── 02-sa-review.md
-├── 03-qa-review.md
-└── 99-verdict.md
+├── review_context.xml
+├── review_prompt.md
+├── reports/
+│   ├── 00-summary.md
+│   ├── 01-swe-review.md
+│   ├── 02-sa-review.md
+│   ├── 03-qa-review.md
+│   └── 99-verdict.md
+└── temp/
+    ├── role-plan.md
+    ├── file-map.md
+    └── findings.md
 ```
 
 **Full Review (large change with auth and DB modifications):**
 
 ```
 .materials/20250115-143022/
-├── 00-summary.md
-├── 01-swe-review.md
-├── 02-sa-review.md
-├── 03-qa-review.md
-├── 04-pe-review.md      ← triggered by DB queries
-├── 05-se-review.md      ← triggered by auth code
-├── 06-oe-review.md      ← triggered by new endpoints
-└── 99-verdict.md
+├── review_context.xml
+├── review_prompt.md
+├── review.patch
+├── reports/
+│   ├── 00-summary.md
+│   ├── 01-swe-review.md
+│   ├── 02-sa-review.md
+│   ├── 03-qa-review.md
+│   ├── 04-pe-review.md      ← triggered by DB queries
+│   ├── 05-se-review.md      ← triggered by auth code
+│   ├── 06-oe-review.md      ← triggered by new endpoints
+│   ├── 07-de-review.md      ← triggered by migration
+│   └── 99-verdict.md
+└── temp/
+    ├── role-plan.md
+    ├── file-map.md
+    └── findings.md
 ```
 
-### Temp Directory for Agent Working Files
+### Temp Directory Protocol
 
-Use `.materials/<timestamp>/temp/` for intermediate working files:
+Three files in `temp/` coordinate the review workflow. They are pre-created as
+stubs by `prep-review.md` — the AI fills them progressively at defined moments.
 
-- File lists and caching
-- Draft findings and analysis notes
-- Context notes and working memory
+**Never skip these files.** They are how the agent externalises its working state
+and avoids holding everything in context simultaneously.
 
-This keeps agent working files organized within the materials directory rather than scattered in system temp locations. The temp directory may be cleaned up after review completion or left for debugging purposes.
+---
+
+#### `temp/role-plan.md` — Read first, fill before reading any file content
+
+**Purpose:** Commit to a role execution plan using only file _names_, before spending
+tokens on file content. Forces deliberate role selection rather than reactive drift.
+
+**When to fill:** After running `git diff --name-only` (or equivalent). Fill
+the triggered roles table and execution order BEFORE reading any diff content.
+
+```markdown
+## Triggered roles
+
+| #   | Role | File / pattern that triggered it |
+| --- | ---- | -------------------------------- |
+| 05  | SE   | src/auth/ modified               |
+| 07  | DE   | migrations/008_add_reports.sql   |
+
+## Execution order
+
+01-swe → 02-sa → 03-qa → 05-se → 07-de → 99-verdict
+
+## Additional roles (from review_prompt.md)
+
+- mle: user flagged LLM integration added
+
+## Skipped roles
+
+- ceo: internal refactor, no public API change
+```
+
+---
+
+#### `temp/file-map.md` — Fill while reading diff content
+
+**Purpose:** Track which roles apply to which files. Catches role triggers that
+only become visible after reading content (not just names). Serves as a navigation
+aid during the review itself.
+
+**When to fill:** Append one row per file as each file's diff is read. Do not
+wait until all files are read.
+
+```markdown
+| File                | Change type | Roles   | Key observation                   |
+| ------------------- | ----------- | ------- | --------------------------------- |
+| src/auth/handler.rs | Modified    | SWE, SE | token validation logic changed    |
+| migrations/008.sql  | New         | DE, OE  | adds NOT NULL col without default |
+| src/routes/mod.rs   | Modified    | SA, OE  | new endpoint registered           |
+```
+
+---
+
+#### `temp/findings.md` — Running log, append after each role
+
+**Purpose:** Compressed finding log that allows `99-verdict.md` to be written by
+reading ONE small file instead of re-loading 5–15 role files (60K+ tokens).
+
+**When to append:** Immediately after writing each role's output file, append
+every `[BLOCKER]` and `[MAJOR]` finding in one line each. `[SUGGESTION]` and
+`[NIT]` are optional — include if they inform the overall verdict.
+
+**Format:** `[ROLE][SEVERITY] path:line — short description`
+
+```
+[SE][BLOCKER] src/auth/handler.rs:34 — IDOR: invoice fetched without tenant check
+[DE][BLOCKER] migrations/008.sql:8 — NOT NULL col without default breaks old binary
+[OE][MAJOR]   src/routes/mod.rs:67 — new endpoint has no timeout on outbound call
+[SWE][NIT]    src/auth/handler.rs:12 — unused import std::collections::HashMap
+```
+
+**When to read:** Read `temp/findings.md` (not individual role files) when writing
+`reports/99-verdict.md`. This is the sole input for verdict synthesis.
+
+---
 
 ## File Walkthrough Format
 

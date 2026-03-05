@@ -1,4 +1,7 @@
-# zrk review materials (per-review output — don't commit)
+# zrk review materials (per-review output — don't commit large context files)
 .materials/*/review_context.xml
 .materials/*/review.patch
 .materials/*/review_prompt.md
+.materials/*/temp/
+
+# reports/ at project root is intentionally NOT ignored — commit your reviews

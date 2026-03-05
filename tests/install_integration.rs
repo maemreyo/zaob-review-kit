@@ -56,6 +56,12 @@ fn install_all_creates_workspace_and_templates() {
 
     // Templates
     assert!(dir.path().join(".archignore").exists());
+
+    // reports/ top-level directory created for storing finished reviews
+    assert!(
+        dir.path().join("reports").exists(),
+        "reports/ directory must be created by install-all"
+    );
 }
 
 #[test]

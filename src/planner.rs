@@ -229,6 +229,14 @@ pub fn plan_install_global(agent: &dyn Agent, force: bool) -> Vec<InstallAction>
 pub fn plan_templates(cwd: &Path, force: bool) -> Vec<InstallAction> {
     let mut actions = Vec::new();
 
+    // reports/ — top-level directory for storing finished review output.
+    // Created unconditionally (idempotent); never force-wiped.
+    // NOT added to .gitignore — users commit reviews here.
+    let reports_dir = cwd.join("reports");
+    if !reports_dir.exists() {
+        actions.push(InstallAction::CreateDir { path: reports_dir });
+    }
+
     // .archignore
     if let Some(archignore) = content::by_name("archignore") {
         let dest = cwd.join(".archignore");
@@ -269,7 +277,6 @@ mod tests {
     use crate::agent::cursor::Cursor;
     use crate::agent::kiro::Kiro;
     use std::path::PathBuf;
-
     #[test]
     fn plan_install_workspace_creates_dir_and_files() {
         let kiro = Kiro::new();
@@ -482,6 +489,33 @@ mod tests {
             role_std_writes.len(),
             16,
             "16 role standards → rules/role-standards/"
+        );
+    }
+
+    #[test]
+    fn plan_templates_creates_reports_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let cwd = dir.path();
+        // reports/ does not exist yet
+        let actions = plan_templates(cwd, false);
+        let has_reports_dir = actions.iter().any(
+            |a| matches!(a, InstallAction::CreateDir { path } if path == &cwd.join("reports")),
+        );
+        assert!(has_reports_dir, "plan_templates must create reports/ dir");
+    }
+
+    #[test]
+    fn plan_templates_skips_reports_dir_when_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let cwd = dir.path();
+        std::fs::create_dir(cwd.join("reports")).unwrap();
+        let actions = plan_templates(cwd, false);
+        let creates_reports = actions.iter().any(
+            |a| matches!(a, InstallAction::CreateDir { path } if path == &cwd.join("reports")),
+        );
+        assert!(
+            !creates_reports,
+            "plan_templates must not re-create existing reports/"
         );
     }
 
