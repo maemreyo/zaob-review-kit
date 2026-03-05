@@ -62,7 +62,7 @@ fn prompt_user(cwd: &Path) -> Result<InitConfig, ZrkError> {
 }
 
 /// Execute init with a given config (testable, no interactive prompts).
-pub fn run_init_with_config(config: &InitConfig, quiet: bool) -> Result<(), ZrkError> {
+pub fn run_init_with_config(config: &InitConfig, force: bool, quiet: bool) -> Result<(), ZrkError> {
     for agent_name in &config.agents {
         let agent = registry::get_agent(agent_name)
             .ok_or_else(|| ZrkError::UnknownAgent(agent_name.clone()))?;
@@ -72,15 +72,15 @@ pub fn run_init_with_config(config: &InitConfig, quiet: bool) -> Result<(), ZrkE
         }
 
         // Install workspace files (pass scaffold_context so project-context.md can be skipped)
-        let mut actions = planner::plan_install(agent.as_ref(), &config.cwd, false, config.scaffold_context);
+        let mut actions = planner::plan_install(agent.as_ref(), &config.cwd, force, config.scaffold_context);
 
         // Install global if requested
         if config.install_global {
-            actions.extend(planner::plan_install_global(agent.as_ref(), false));
+            actions.extend(planner::plan_install_global(agent.as_ref(), force));
         }
 
         // Install templates
-        actions.extend(planner::plan_templates(&config.cwd, false));
+        actions.extend(planner::plan_templates(&config.cwd, force));
 
         executor::execute(&actions, quiet)?;
     }
@@ -102,7 +102,7 @@ pub fn run_init(cli: &Cli) -> Result<(), ZrkError> {
     #[cfg(feature = "wizard")]
     {
         let config = prompt_user(&cwd)?;
-        run_init_with_config(&config, cli.quiet)
+        run_init_with_config(&config, cli.force, cli.quiet)
     }
 
     #[cfg(not(feature = "wizard"))]
@@ -114,7 +114,7 @@ pub fn run_init(cli: &Cli) -> Result<(), ZrkError> {
             scaffold_context: true,
             cwd,
         };
-        run_init_with_config(&config, cli.quiet)
+        run_init_with_config(&config, cli.force, cli.quiet)
     }
 }
 
@@ -132,7 +132,7 @@ mod tests {
             cwd: dir.path().to_path_buf(),
         };
 
-        run_init_with_config(&config, true).unwrap();
+        run_init_with_config(&config, false, true).unwrap();
 
         let steering = dir.path().join(".kiro").join("steering");
         assert!(steering.join("prep-review.md").exists());
@@ -155,7 +155,7 @@ mod tests {
         };
 
         // Cursor global is manual-only, so this should still succeed
-        run_init_with_config(&config, true).unwrap();
+        run_init_with_config(&config, false, true).unwrap();
         assert!(dir.path().join(".cursor").join("rules").exists());
     }
 
@@ -169,7 +169,7 @@ mod tests {
             cwd: dir.path().to_path_buf(),
         };
 
-        run_init_with_config(&config, true).unwrap();
+        run_init_with_config(&config, false, true).unwrap();
 
         let steering = dir.path().join(".kiro").join("steering");
         assert!(!steering.join("project-context.md").exists());
@@ -186,7 +186,7 @@ mod tests {
             cwd: dir.path().to_path_buf(),
         };
 
-        run_init_with_config(&config, true).unwrap();
+        run_init_with_config(&config, false, true).unwrap();
 
         assert!(dir.path().join(".kiro").join("steering").exists());
         assert!(dir.path().join(".cursor").join("rules").exists());
