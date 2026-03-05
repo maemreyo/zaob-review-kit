@@ -46,6 +46,17 @@ pub trait Agent {
         self.transform_workspace(file)
     }
 
+    /// Filter agent-specific tagged sections from raw content before wrapping.
+    ///
+    /// Strips `<!-- agent:OTHER:start --> ... <!-- agent:OTHER:end -->` blocks
+    /// that belong to a different agent. Call this on `file.raw` inside every
+    /// `transform_*` method instead of using `file.raw` directly.
+    ///
+    /// Default implementation delegates to `content::transform::filter_agent_sections`.
+    fn filter_content(&self, raw: &str) -> String {
+        crate::content::transform::filter_agent_sections(raw, self.name())
+    }
+
     /// Optional secondary workspace directory for workflow files (e.g. Antigravity's .agent/workflows/).
     /// When Some, the planner routes files where is_workflow_file() returns true there instead of workspace_dir.
     fn workflow_dir(&self, _cwd: &Path) -> Option<PathBuf> {

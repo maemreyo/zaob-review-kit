@@ -62,6 +62,35 @@ or topic-based searches — use `--stdin` to pipe a file list from shell tools.
 `--stdin` reads file paths one per line; paths specified this way are added to
 the include patterns, with normal ignore rules still applying.
 
+### ⛔ Never write an intermediate file list
+
+Writing file paths to a temp file then reading them back is always a pointless
+round-trip. Always pipe directly from the source command into repomix.
+
+<!-- agent:kiro:start -->
+> **Kiro:** The heredoc pattern (`cat > file << 'EOF'`) with 50+ lines also hangs
+> Kiro's terminal tool completely. Avoid both the heredoc and the temp-file approach.
+<!-- agent:kiro:end -->
+
+```bash
+# ❌ Wrong — heredoc with many lines; also hangs terminal-based agents
+cat > /tmp/files.txt << 'EOF'
+src/a.rs
+src/b.rs
+... (many more lines)
+EOF
+
+# ❌ Also wrong — pointless round-trip through a temp file
+git diff --name-only > /tmp/files.txt && repomix --include "$(cat /tmp/files.txt)"
+```
+
+**Always pipe directly — no intermediate files:**
+
+```bash
+# ✅ Correct
+git diff HEAD~3..HEAD --name-only | repomix --stdin --style xml --output ...
+```
+
 ### Algorithm A — X latest commits
 
 ```bash
@@ -155,9 +184,17 @@ architectural consistency. If documentation contradicts code changes, the
 reviewer should flag the discrepancy.
 
 **Important:** `.archignore` and `.repomixignore` patterns still apply.
-Binary images (_.png, _.svg) should be included selectively — they may be
+Binary images (`*.png`, `*.svg`) should be included selectively — they may be
 large and consume significant token budget. Use `--token-count-tree` to
 preview their impact before packing.
+
+**Always exclude `docs/reviews/`** — previous review output files contain
+stale analysis that inflates token budget without adding signal. Use
+`! -path "*/reviews/*"` in any `find` command targeting `docs/`:
+
+```bash
+find docs/ -name "*.md" ! -path "*/reviews/*"
+```
 
 ### Example: Include documentation with source files
 
