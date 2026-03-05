@@ -46,6 +46,46 @@ pub enum InstallAction {
     },
 }
 
+/// Plan installation of role-standard files for an agent.
+///
+/// Role standards are always written as individual files — never consolidated —
+/// even for agents like TRAE that consolidate workspace files. This is required
+/// so the agent can load exactly one standard at a time immediately before
+/// writing each role review section.
+pub fn plan_install_role_standards(
+    agent: &dyn Agent,
+    cwd: &Path,
+    force: bool,
+) -> Vec<InstallAction> {
+    let role_standards_dir = agent.role_standards_dir(cwd);
+    let workspace_dir = agent.workspace_dir(cwd);
+    let files = content::by_scope(ContentScope::RoleStandard);
+    let mut actions = Vec::new();
+
+    actions.push(InstallAction::CreateDir {
+        path: role_standards_dir.clone(),
+    });
+
+    for file in &files {
+        let output = agent.transform_role_standard(file);
+        let dest = role_standards_dir.join(&output.filename);
+        if dest.exists() && !force {
+            actions.push(InstallAction::SkipExisting { path: dest });
+        } else {
+            actions.push(InstallAction::WriteFile {
+                path: dest,
+                content: output.content,
+                overwrite: force,
+                // Track role standards in the workspace manifest so `zrk status`
+                // and `zrk update` see them alongside the other workspace files.
+                manifest_base: workspace_dir.clone(),
+            });
+        }
+    }
+
+    actions
+}
+
 /// Plan workspace file installation for an agent.
 /// `scaffold_context`: when false, project-context.md is excluded from the plan.
 pub fn plan_install(
@@ -105,6 +145,10 @@ pub fn plan_install(
             }
         }
     }
+
+    // Install role standards into <workspace_dir>/role-standards/.
+    // Always individual files, never consolidated.
+    actions.extend(plan_install_role_standards(agent, cwd, force));
 
     actions.push(InstallAction::WriteManifest {
         base_dir: workspace_dir,
@@ -232,24 +276,53 @@ mod tests {
         let cwd = Path::new("/fake/project");
         let actions = plan_install(&kiro, cwd, false, true);
 
-        // First action should be CreateDir
+        // First action should be CreateDir (workspace)
         assert!(matches!(&actions[0], InstallAction::CreateDir { .. }));
 
-        // Should have 5 WriteFile actions (workspace has 5 files)
+        // 5 workspace WriteFiles + 16 role-standard WriteFiles = 21
         let write_count = actions
             .iter()
             .filter(|a| matches!(a, InstallAction::WriteFile { .. }))
             .count();
-        assert_eq!(write_count, 5);
+        assert_eq!(write_count, 21);
 
-        // Should have a WriteManifest
+        // Should have a WriteManifest at the end
         assert!(actions
             .iter()
             .any(|a| matches!(a, InstallAction::WriteManifest { .. })));
     }
 
     #[test]
-    fn plan_install_global_cursor_produces_manual_instructions() {
+    fn plan_install_creates_role_standards_dir() {
+        let kiro = Kiro::new();
+        let cwd = Path::new("/fake/project");
+        let actions = plan_install(&kiro, cwd, false, true);
+
+        let role_standards_path = PathBuf::from("/fake/project/.kiro/steering/role-standards");
+        let has_role_standards_dir = actions.iter().any(
+            |a| matches!(a, InstallAction::CreateDir { path } if path == &role_standards_path),
+        );
+        assert!(
+            has_role_standards_dir,
+            "role-standards/ dir must be created"
+        );
+    }
+
+    #[test]
+    fn plan_install_role_standards_writes_17_files() {
+        let kiro = Kiro::new();
+        let cwd = Path::new("/fake/project");
+        let actions = plan_install_role_standards(&kiro, cwd, false);
+
+        let write_count = actions
+            .iter()
+            .filter(|a| matches!(a, InstallAction::WriteFile { .. }))
+            .count();
+        assert_eq!(write_count, 16);
+    }
+
+    #[test]
+    fn plan_install_role_standards_kiro_has_agent_requested() {
         let cursor = Cursor::new();
         let actions = plan_install_global(&cursor, false);
 
@@ -293,36 +366,58 @@ mod tests {
         let cwd = Path::new("/fake/project");
         let actions = plan_install_all(&kiro, cwd, false);
 
-        // Should have actions from workspace, global, and templates
+        // Should have at least: workspace dir + global dir + role-standards dir
         let create_dir_count = actions
             .iter()
             .filter(|a| matches!(a, InstallAction::CreateDir { .. }))
             .count();
-        assert!(create_dir_count >= 2); // workspace dir + global dir
+        assert!(create_dir_count >= 3);
 
+        // 5 workspace + 6 global + 16 role-standards = 27
         let write_count = actions
             .iter()
             .filter(|a| matches!(a, InstallAction::WriteFile { .. }))
             .count();
-        assert_eq!(write_count, 11); // 5 workspace + 6 global
+        assert_eq!(write_count, 27);
     }
 
     #[test]
-    fn plan_install_trae_uses_append_to_file() {
+    fn plan_install_trae_uses_append_to_file_for_workspace() {
         use crate::agent::trae::Trae;
         let trae = Trae::new();
         let actions = plan_install(&trae, Path::new("/fake/project"), false, true);
 
+        // 5 workspace files → AppendToFile (consolidated)
         let append_count = actions
             .iter()
             .filter(|a| matches!(a, InstallAction::AppendToFile { .. }))
             .count();
-        assert_eq!(append_count, 5); // 5 workspace files, all consolidated
+        assert_eq!(append_count, 5);
 
-        // No WriteFile should be emitted for consolidating agents
-        assert!(!actions
+        // 16 role-standard files → individual WriteFiles (never consolidated)
+        let write_count = actions
             .iter()
-            .any(|a| matches!(a, InstallAction::WriteFile { .. })));
+            .filter(|a| matches!(a, InstallAction::WriteFile { .. }))
+            .count();
+        assert_eq!(write_count, 16);
+    }
+
+    #[test]
+    fn plan_install_trae_role_standards_have_original_filenames() {
+        use crate::agent::trae::Trae;
+        let trae = Trae::new();
+        let cwd = Path::new("/fake/project");
+        let actions = plan_install_role_standards(&trae, cwd, false);
+
+        for action in &actions {
+            if let InstallAction::WriteFile { path, .. } = action {
+                let filename = path.file_name().unwrap().to_str().unwrap();
+                assert_ne!(
+                    filename, "project_rules.md",
+                    "TRAE role standard must not consolidate into project_rules.md"
+                );
+            }
+        }
     }
 
     #[test]
@@ -350,7 +445,7 @@ mod tests {
             "prep-review, pack-materials, project-context → workflows/"
         );
 
-        // Non-workflow files must land in .agent/rules/
+        // Non-workflow workspace files must land in .agent/rules/
         let rules_writes: Vec<_> = actions
             .iter()
             .filter_map(|a| {
@@ -360,12 +455,33 @@ mod tests {
                     None
                 }
             })
-            .filter(|p| p.components().any(|c| c.as_os_str() == "rules"))
+            .filter(|p| {
+                p.components().any(|c| c.as_os_str() == "rules")
+                    && !p.components().any(|c| c.as_os_str() == "role-standards")
+            })
             .collect();
         assert_eq!(
             rules_writes.len(),
             2,
             "review-checklist.md, review-best-practices.md → rules/"
+        );
+
+        // Role standards land in .agent/rules/role-standards/
+        let role_std_writes: Vec<_> = actions
+            .iter()
+            .filter_map(|a| {
+                if let InstallAction::WriteFile { path, .. } = a {
+                    Some(path)
+                } else {
+                    None
+                }
+            })
+            .filter(|p| p.components().any(|c| c.as_os_str() == "role-standards"))
+            .collect();
+        assert_eq!(
+            role_std_writes.len(),
+            16,
+            "16 role standards → rules/role-standards/"
         );
     }
 
@@ -386,11 +502,11 @@ mod tests {
             "project-context.md must be excluded when scaffold_context=false"
         );
 
-        // Other workspace files must still be present
+        // 4 workspace (5 - project-context) + 16 role-standards = 20
         let write_count = actions
             .iter()
             .filter(|a| matches!(a, InstallAction::WriteFile { .. }))
             .count();
-        assert_eq!(write_count, 4); // 5 workspace - 1 skipped
+        assert_eq!(write_count, 20);
     }
 }

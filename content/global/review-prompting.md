@@ -12,6 +12,54 @@ Always structure your review with:
 6. **Recommendations** — prioritized action items
 7. **Verdict** — Ship / Ship with changes / Needs rework / Needs discussion
 
+## Role Standard Loading Protocol
+
+Role standard files in `role-standards/` contain full checklists for each reviewer
+perspective. They are **not pre-loaded** — pulling all standards into context at once
+dilutes attention and degrades review quality ("lost in the middle" effect).
+
+**Sequential read-write-proceed pattern:**
+
+```
+For each activated role (in order 01 → 15):
+  1. READ  role-standards/<NN>-<role>-standard.md
+  2. APPLY its checklist to the diff
+  3. WRITE <NN>-<role>-review.md with findings
+  4. PROCEED to next role (do not re-read the standard)
+
+After all role files are written:
+  5. WRITE 99-verdict.md synthesising across all role outputs
+```
+
+This keeps each role sharp — maximum ~5K tokens of checklist active at a time
+instead of 60K+ for all standards simultaneously.
+
+**User-specified roles:**
+
+If `review_prompt.md` contains an `## Additional Roles` section, activate those
+roles in addition to the auto-triggered set. Run them after the standard triggered
+roles, in the order listed.
+
+```markdown
+## Additional Roles
+
+- mle ← user knows this PR integrates an LLM
+- finops ← user knows new Lambda functions were added
+```
+
+**Role exclusions:**
+
+If `review_prompt.md` contains `## Skip Roles`, omit those even if the trigger
+conditions match.
+
+```markdown
+## Skip Roles
+
+- ceo ← internal refactor only, no user impact
+```
+
+---
+
 ## Multi-File Output Structure
 
 **Default format is Markdown.** Generate separate `.md` files organized by role perspective unless the user explicitly requests another format (e.g., `.docx`).
@@ -20,18 +68,25 @@ Always structure your review with:
 
 All review files use the pattern `<NN>-<slug>.md` where `NN` is a two-digit number ensuring correct alphabetical sort order:
 
-| File                   | Content                                                                              |
-| ---------------------- | ------------------------------------------------------------------------------------ |
-| `00-summary.md`        | Overall summary, file walkthrough, risk assessment, review effort, table of contents |
-| `01-swe-review.md`     | Senior Software Engineer findings (always created)                                   |
-| `02-sa-review.md`      | Software Architect findings (always created)                                         |
-| `03-qa-review.md`      | Quality Assurance findings (always created)                                          |
-| `04-pe-review.md`      | Performance Engineer findings (created when triggered)                               |
-| `05-se-review.md`      | Security Engineer findings (created when triggered)                                  |
-| `06-oe-review.md`      | Operations Engineer findings (created when triggered)                                |
-| `07-ceo-review.md`     | CEO perspective findings (created when triggered)                                    |
-| `08-devil-advocate.md` | Devil's Advocate findings (created when triggered)                                   |
-| `99-verdict.md`        | Suggested tests, recommendations, final verdict, AI caveat                           |
+| File                  | Content                                                                              |
+| --------------------- | ------------------------------------------------------------------------------------ |
+| `00-summary.md`       | Overall summary, file walkthrough, risk assessment, review effort, table of contents |
+| `01-swe-review.md`    | Senior Software Engineer findings (always created)                                   |
+| `02-sa-review.md`     | Software Architect findings (always created)                                         |
+| `03-qa-review.md`     | Quality Assurance findings (always created)                                          |
+| `04-pe-review.md`     | Performance Engineer findings (created when triggered)                               |
+| `05-se-review.md`     | Security Engineer findings (created when triggered)                                  |
+| `06-oe-review.md`     | Operations Engineer findings (created when triggered)                                |
+| `07-de-review.md`     | Database Engineer findings (created when triggered)                                  |
+| `08-ux-review.md`     | Frontend / UX Engineer findings (created when triggered)                             |
+| `09-cl-review.md`     | Compliance Engineer findings (created when triggered)                                |
+| `10-ceo-review.md`    | CEO perspective findings (created when triggered)                                    |
+| `11-da-review.md`     | Devil's Advocate findings (created when triggered)                                   |
+| `12-mle-review.md`    | ML / AI Engineer findings (created when triggered)                                   |
+| `13-api-review.md`    | API Design findings (created when triggered)                                         |
+| `14-finops-review.md` | FinOps / Cloud Cost findings (created when triggered)                                |
+| `15-dx-review.md`     | Developer Experience findings (created when triggered)                               |
+| `99-verdict.md`       | Suggested tests, recommendations, final verdict, AI caveat                           |
 
 ### Content Distribution
 
@@ -69,13 +124,20 @@ All review files use the pattern `<NN>-<slug>.md` where `NN` is a two-digit numb
 
 **Triggered roles** (create files only when calibration rules activate them):
 
-- Performance Engineer (04) — DB queries, async code, nested loops
-- Security Engineer (05) — auth code, new dependencies
-- Operations Engineer (06) — new endpoints, config changes, retry logic
-- CEO (07) — breaking changes, public API changes
-- Devil's Advocate (08) — breaking changes, public API changes
+See `review-roles.md` for the full trigger table. Summary:
 
-See Calibration Rules section for complete trigger conditions.
+- Performance Engineer (04) — DB queries, loops, async, caching
+- Security Engineer (05) — auth, user input, new deps, PII, crypto
+- Operations Engineer (06) — new endpoints, config changes, jobs, IaC
+- Database Engineer (07) — schema migrations, ORM models, new queries
+- Frontend / UX Engineer (08) — UI components, CSS, accessibility
+- Compliance Engineer (09) — PII, GDPR/CCPA, cookies, licensing
+- CEO (10) — breaking changes, public API changes, user-visible impact
+- Devil's Advocate (11) — major features, architecture decisions
+- ML / AI Engineer (12) — ML models, LLM integration, datasets
+- API Design (13) — new REST/GraphQL/gRPC endpoints, versioning
+- FinOps (14) — new infra, cloud resources, cost-significant changes
+- Developer Experience (15) — public APIs, SDK, README, onboarding
 
 ### Navigation Requirements
 
@@ -89,6 +151,16 @@ See Calibration Rules section for complete trigger conditions.
 - [Quality Assurance Review](03-qa-review.md)
 - [Performance Engineer Review](04-pe-review.md) _(if triggered)_
 - [Security Engineer Review](05-se-review.md) _(if triggered)_
+- [Operations Engineer Review](06-oe-review.md) _(if triggered)_
+- [Database Engineer Review](07-de-review.md) _(if triggered)_
+- [Frontend / UX Review](08-ux-review.md) _(if triggered)_
+- [Compliance Review](09-cl-review.md) _(if triggered)_
+- [CEO Review](10-ceo-review.md) _(if triggered)_
+- [Devil's Advocate](11-da-review.md) _(if triggered)_
+- [ML / AI Engineer Review](12-mle-review.md) _(if triggered)_
+- [API Design Review](13-api-review.md) _(if triggered)_
+- [FinOps Review](14-finops-review.md) _(if triggered)_
+- [Developer Experience Review](15-dx-review.md) _(if triggered)_
 - [Final Verdict](99-verdict.md)
 ```
 
@@ -207,17 +279,24 @@ suggestions. If the diff has no testable logic, state "No new test cases suggest
 
 ### By change type (overrides size rules)
 
-| Change contains                                      | Add roles                       |
-| ---------------------------------------------------- | ------------------------------- |
-| `auth/`, `login`, `token`, `permission`, `session`   | Security Engineer               |
-| DB queries, migrations, schema changes               | Performance Engineer + SA + OE  |
-| Public API surface changes                           | SA + CEO + Devil's Advocate     |
-| New dependencies                                     | Security Engineer               |
-| Breaking changes                                     | CEO + Devil's Advocate (always) |
-| `async`, concurrency primitives, locks               | Performance Engineer            |
-| New endpoints, background jobs, cron/scheduled tasks | OE                              |
-| New env vars, config keys, external service calls    | OE                              |
-| Retry logic, timeouts, circuit breakers              | OE + Performance Engineer       |
+| Change contains                                      | Add roles                    |
+| ---------------------------------------------------- | ---------------------------- |
+| `auth/`, `login`, `token`, `permission`, `session`   | SE (05)                      |
+| DB queries, migrations, schema changes               | PE (04) + DE (07) + OE (06)  |
+| Public API surface changes                           | SA (02) + CEO (10) + DA (11) |
+| New dependencies                                     | SE (05)                      |
+| Breaking changes                                     | CEO (10) + DA (11) — always  |
+| `async`, concurrency primitives, locks               | PE (04)                      |
+| New endpoints, background jobs, cron/scheduled tasks | OE (06)                      |
+| New env vars, config keys, external service calls    | OE (06)                      |
+| Retry logic, timeouts, circuit breakers              | OE (06) + PE (04)            |
+| UI components, CSS, accessibility                    | UX (08)                      |
+| PII / GDPR / cookies / open-source licence           | CL (09)                      |
+| ML model / LLM integration / dataset pipeline        | MLE (12)                     |
+| New REST / GraphQL / gRPC endpoints                  | API (13)                     |
+| New infra / cloud resources / Lambda / auto-scaling  | FinOps (14) + OE (06)        |
+| README / SDK / public API docs / onboarding changes  | DX (15)                      |
+| Major feature / significant architecture change      | DA (11)                      |
 
 ### Verdict scale
 

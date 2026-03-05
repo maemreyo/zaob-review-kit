@@ -188,6 +188,18 @@ User says something like:
 
    <any specific questions the user mentioned>
 
+   ## Additional Roles
+
+   <!-- Uncomment or add roles to activate beyond auto-triggered defaults     -->
+   <!-- Available: pe, se, oe, de, ux, cl, ceo, da, mle, api, finops, dx     -->
+   <!-- Example: - mle   (this PR integrates an LLM API)                      -->
+   <!-- Example: - finops (new cloud resources provisioned)                   -->
+
+   ## Skip Roles
+
+   <!-- Uncomment to suppress auto-triggered roles that are not relevant here -->
+   <!-- Example: - ceo   (internal refactor only, no user impact)             -->
+
    ## Working Files
 
    Use the `temp/` directory for any intermediate working files during the review:

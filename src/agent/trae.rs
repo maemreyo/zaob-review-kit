@@ -51,6 +51,17 @@ impl Agent for Trae {
             manual_only: false,
         }
     }
+
+    /// Role standards must stay as individual files even though TRAE normally
+    /// consolidates workspace files into project_rules.md. Loading standards
+    /// one-at-a-time requires each to be a separate, addressable file.
+    fn transform_role_standard(&self, file: &ContentFile) -> TransformOutput {
+        TransformOutput {
+            filename: file.name.clone(),
+            content: as_plain(file.raw),
+            manual_only: false,
+        }
+    }
 }
 
 #[cfg(test)]

@@ -10,7 +10,9 @@ pub struct Kiro {
 
 impl Kiro {
     pub fn new() -> Self {
-        Self { home: HomeResolver::new() }
+        Self {
+            home: HomeResolver::new(),
+        }
     }
 }
 
@@ -45,6 +47,27 @@ impl Agent for Kiro {
         TransformOutput {
             filename: file.name.clone(),
             content: wrap_yaml_frontmatter(&file.name, &description, file.raw),
+            manual_only: false,
+        }
+    }
+
+    /// Role standards use `inclusion: agent-requested` so Kiro does NOT
+    /// auto-load them into context at startup. The agent reads exactly one
+    /// standard file immediately before writing each role's review output,
+    /// then proceeds without holding it in context.
+    fn transform_role_standard(&self, file: &ContentFile) -> TransformOutput {
+        let description = format!(
+            "zrk role standard: {} — load only when writing corresponding review file",
+            file.name.trim_end_matches(".md")
+        );
+        let name = file.name.trim_end_matches(".md");
+        let content = format!(
+            "---\ndescription: {}\ninclusion: agent-requested\nname: {}\n---\n\n{}",
+            description, name, file.raw
+        );
+        TransformOutput {
+            filename: file.name.clone(),
+            content,
             manual_only: false,
         }
     }

@@ -27,6 +27,25 @@ pub trait Agent {
     fn transform_global(&self, file: &ContentFile) -> TransformOutput;
     fn transform_workspace(&self, file: &ContentFile) -> TransformOutput;
 
+    /// Directory for lazy-loaded role standard files.
+    /// Default: `<workspace_dir>/role-standards/`
+    /// Agents that need a custom location (e.g. routing to a separate path)
+    /// can override this.
+    fn role_standards_dir(&self, cwd: &Path) -> PathBuf {
+        self.workspace_dir(cwd).join("role-standards")
+    }
+
+    /// Transform a role-standard file for installation.
+    /// Default: delegates to `transform_workspace` so each agent's native
+    /// format (YAML frontmatter, MDC, comment header, plain) is applied
+    /// consistently. Override when the standard workspace transform is
+    /// unsuitable — e.g. Kiro adds `inclusion: agent-requested` to prevent
+    /// auto-loading; TRAE overrides because its workspace transform always
+    /// consolidates into a single file.
+    fn transform_role_standard(&self, file: &ContentFile) -> TransformOutput {
+        self.transform_workspace(file)
+    }
+
     /// Optional secondary workspace directory for workflow files (e.g. Antigravity's .agent/workflows/).
     /// When Some, the planner routes files where is_workflow_file() returns true there instead of workspace_dir.
     fn workflow_dir(&self, _cwd: &Path) -> Option<PathBuf> {
@@ -41,6 +60,7 @@ pub trait Agent {
 
     /// When true, the planner uses AppendToFile instead of WriteFile for workspace files,
     /// consolidating all content into a single file (e.g. TRAE's project_rules.md).
+    /// Role standard files are never consolidated regardless of this flag.
     fn consolidates_to_single_file(&self) -> bool {
         false
     }
@@ -84,12 +104,33 @@ mod tests {
     }
 
     #[test]
+    fn kiro_role_standards_dir() {
+        let k = kiro::Kiro::new();
+        let dir = k.role_standards_dir(Path::new("/project"));
+        assert_eq!(dir, PathBuf::from("/project/.kiro/steering/role-standards"));
+    }
+
+    #[test]
     fn kiro_transform_produces_yaml() {
         let k = kiro::Kiro::new();
         let output = k.transform_global(&test_file());
         assert!(output.content.starts_with("---\n"));
         assert!(!output.manual_only);
         assert_eq!(output.filename, "review-roles.md");
+    }
+
+    #[test]
+    fn kiro_transform_role_standard_has_agent_requested_inclusion() {
+        let k = kiro::Kiro::new();
+        let file = ContentFile {
+            name: "01-swe-standard.md".into(),
+            scope: ContentScope::RoleStandard,
+            raw: "# SWE checklist",
+        };
+        let output = k.transform_role_standard(&file);
+        assert!(output.content.contains("inclusion: agent-requested"));
+        assert_eq!(output.filename, "01-swe-standard.md");
+        assert!(!output.manual_only);
     }
 
     // Claude Code tests
@@ -130,11 +171,31 @@ mod tests {
     }
 
     #[test]
+    fn cursor_role_standards_dir() {
+        let c = cursor::Cursor::new();
+        let dir = c.role_standards_dir(Path::new("/project"));
+        assert_eq!(dir, PathBuf::from("/project/.cursor/rules/role-standards"));
+    }
+
+    #[test]
     fn cursor_transform_produces_mdc() {
         let c = cursor::Cursor::new();
         let output = c.transform_workspace(&test_file());
         assert!(output.filename.ends_with(".mdc"));
         assert!(output.content.contains("description:"));
+    }
+
+    #[test]
+    fn cursor_transform_role_standard_produces_mdc() {
+        let c = cursor::Cursor::new();
+        let file = ContentFile {
+            name: "01-swe-standard.md".into(),
+            scope: ContentScope::RoleStandard,
+            raw: "# SWE",
+        };
+        let output = c.transform_role_standard(&file);
+        // Cursor delegates to transform_workspace → .mdc extension
+        assert!(output.filename.ends_with(".mdc"));
     }
 
     #[test]
@@ -171,5 +232,20 @@ mod tests {
         let w = windsurf::Windsurf::new();
         let output = w.transform_global(&test_file());
         assert!(output.manual_only);
+    }
+
+    // TRAE role_standard test — must NOT consolidate into project_rules.md
+    #[test]
+    fn trae_transform_role_standard_preserves_filename() {
+        let t = trae::Trae::new();
+        let file = ContentFile {
+            name: "05-se-standard.md".into(),
+            scope: ContentScope::RoleStandard,
+            raw: "# SE checklist",
+        };
+        let output = t.transform_role_standard(&file);
+        // Must keep original filename, not "project_rules.md"
+        assert_eq!(output.filename, "05-se-standard.md");
+        assert!(!output.manual_only);
     }
 }
