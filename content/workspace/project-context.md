@@ -32,3 +32,20 @@
 ## Review Focus Areas
 
 <!-- What should reviewers pay extra attention to? -->
+
+## Documentation Map
+
+<!--
+  Map keywords to doc files so `zrk prep` can suggest relevant docs automatically.
+  Format: keyword, keyword  →  path/to/doc.md
+  Keywords are matched against changed file names (case-insensitive substring).
+  One entry per line. Lines starting with <!-- are ignored.
+-->
+
+<!-- Examples — replace with your project's actual docs:
+auth, jwt, login, session      →  docs/architecture/auth.md
+database, migration, schema    →  docs/architecture/database.md
+api, route, endpoint           →  docs/architecture/api-design.md
+frontend, component, ui        →  docs/architecture/frontend.md
+deploy, docker, ci             →  docs/operations/deployment.md
+-->

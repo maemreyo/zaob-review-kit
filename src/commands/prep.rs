@@ -781,6 +781,87 @@ fn resolve_cwd(cli: &Cli) -> PathBuf {
     })
 }
 
+// ── Doc map suggestion ────────────────────────────────────────────────────────
+
+/// One entry from `## Documentation Map`: keywords that trigger it + the file path.
+#[derive(Debug, PartialEq)]
+pub struct DocMapEntry {
+    pub keywords: Vec<String>,
+    pub path: String,
+}
+
+/// Parse `## Documentation Map` section from `project-context.md`.
+///
+/// Expected format (one entry per line, inside the section):
+///   auth, jwt, login  →  docs/security.md
+///   database, migration  →  docs/database/schema.md
+///
+/// Lines not matching `keywords → path` are silently skipped.
+pub fn parse_doc_map(cwd: &Path) -> Vec<DocMapEntry> {
+    // Try workspace-local first, then global
+    let candidates = [
+        cwd.join(".kiro/steering/project-context.md"),
+        cwd.join("project-context.md"),
+    ];
+    let content = candidates.iter()
+        .find_map(|p| std::fs::read_to_string(p).ok())
+        .unwrap_or_default();
+
+    let mut in_section = false;
+    let mut entries = Vec::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("## Documentation Map") {
+            in_section = true;
+            continue;
+        }
+        // Stop at next ## heading
+        if in_section && trimmed.starts_with("## ") {
+            break;
+        }
+        if !in_section || trimmed.is_empty() || trimmed.starts_with("<!--") || trimmed.starts_with("//") {
+            continue;
+        }
+        // Parse "keywords → path" or "keywords -> path"
+        if let Some((left, right)) = trimmed.split_once('→').or_else(|| trimmed.split_once("->")) {
+            let keywords: Vec<String> = left
+                .split(',')
+                .map(|k| k.trim().to_lowercase())
+                .filter(|k| !k.is_empty())
+                .collect();
+            let path = right.trim().to_string();
+            if !keywords.is_empty() && !path.is_empty() {
+                entries.push(DocMapEntry { keywords, path });
+            }
+        }
+    }
+    entries
+}
+
+/// Match changed file paths against doc map entries.
+/// Returns `(path, matched_keywords)` for each entry that has at least one match.
+pub fn suggest_docs<'a>(
+    changed_files: &[String],
+    doc_map: &'a [DocMapEntry],
+) -> Vec<(&'a str, Vec<String>)> {
+    let lowered: Vec<String> = changed_files.iter().map(|f| f.to_lowercase()).collect();
+    let mut suggestions = Vec::new();
+
+    for entry in doc_map {
+        let mut matched = Vec::new();
+        for kw in &entry.keywords {
+            if lowered.iter().any(|f| f.contains(kw.as_str())) {
+                matched.push(kw.clone());
+            }
+        }
+        if !matched.is_empty() {
+            suggestions.push((entry.path.as_str(), matched));
+        }
+    }
+    suggestions
+}
+
 pub fn run_prep(cli: &Cli, args: &PrepArgs) -> Result<(), ZrkError> {
     let cwd = resolve_cwd(cli);
     let scope = parse_scope(args)?;
@@ -819,6 +900,40 @@ pub fn run_prep(cli: &Cli, args: &PrepArgs) -> Result<(), ZrkError> {
                 codes.join(", ")
             ));
         }
+    }
+
+    // ── 2b. Suggest docs from Documentation Map ───────────────────────────────
+    let no_docs_provided = args.extra_files.is_empty() && args.doc_dirs.is_empty();
+    let doc_map = parse_doc_map(&cwd);
+    let suggestions = if no_docs_provided && !doc_map.is_empty() {
+        suggest_docs(&changed_files, &doc_map)
+    } else {
+        vec![]
+    };
+
+    if !cli.quiet && !suggestions.is_empty() {
+        println!();
+        output::info("  Suggested docs (from Documentation Map in project-context.md):");
+        for (path, matched) in &suggestions {
+            println!("    {}  (matched: {})", path, matched.join(", "));
+        }
+        println!();
+        // Build re-run hint
+        let scope_str = match &scope {
+            PrepScope::GitRange(r) => r.clone(),
+            PrepScope::CommitHashes(h) => h.join(" "),
+            PrepScope::Topic(t) => format!("--topic {}", shell_quote(t)),
+        };
+        let includes: Vec<String> = suggestions.iter()
+            .map(|(p, _)| (*p).to_string())
+            .collect();
+        println!(
+            "  → To include: zrk prep {} --include {}",
+            scope_str,
+            includes.join(" ")
+        );
+        println!("  → Continuing without docs (re-run with --include to add them)");
+        println!();
     }
 
     // ── 3. Dry run ────────────────────────────────────────────────────────────
@@ -1309,7 +1424,72 @@ mod tests {
     }
 
     #[test]
-    fn run_prep_dry_run_creates_nothing() {
+    fn parse_doc_map_parses_arrow_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let steering = dir.path().join(".kiro/steering");
+        std::fs::create_dir_all(&steering).unwrap();
+        std::fs::write(
+            steering.join("project-context.md"),
+            "# Project\n\n## Documentation Map\n\nauth, jwt → docs/security.md\ndatabase, migration → docs/database.md\n\n## Other\n",
+        ).unwrap();
+        let entries = parse_doc_map(dir.path());
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].keywords, vec!["auth", "jwt"]);
+        assert_eq!(entries[0].path, "docs/security.md");
+        assert_eq!(entries[1].keywords, vec!["database", "migration"]);
+    }
+
+    #[test]
+    fn parse_doc_map_skips_comment_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let steering = dir.path().join(".kiro/steering");
+        std::fs::create_dir_all(&steering).unwrap();
+        std::fs::write(
+            steering.join("project-context.md"),
+            "## Documentation Map\n\n<!-- auth → docs/auth.md -->\napi, route → docs/api.md\n",
+        ).unwrap();
+        let entries = parse_doc_map(dir.path());
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].path, "docs/api.md");
+    }
+
+    #[test]
+    fn parse_doc_map_no_file_returns_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(parse_doc_map(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn suggest_docs_matches_keywords() {
+        let map = vec![
+            DocMapEntry { keywords: vec!["auth".into(), "jwt".into()], path: "docs/security.md".into() },
+            DocMapEntry { keywords: vec!["migration".into(), "schema".into()], path: "docs/database.md".into() },
+            DocMapEntry { keywords: vec!["frontend".into()], path: "docs/ui.md".into() },
+        ];
+        let files = vec![
+            "src/auth/handler.rs".to_string(),
+            "migrations/001_create_users.sql".to_string(),
+        ];
+        let suggestions = suggest_docs(&files, &map);
+        assert_eq!(suggestions.len(), 2);
+        assert_eq!(suggestions[0].0, "docs/security.md");
+        assert_eq!(suggestions[1].0, "docs/database.md");
+        // frontend not triggered
+        assert!(!suggestions.iter().any(|(p, _)| *p == "docs/ui.md"));
+    }
+
+    #[test]
+    fn suggest_docs_case_insensitive() {
+        let map = vec![
+            DocMapEntry { keywords: vec!["schedule".into()], path: "docs/scheduling.md".into() },
+        ];
+        let files = vec!["src/routes/Schedules.rs".to_string()];
+        let suggestions = suggest_docs(&files, &map);
+        assert_eq!(suggestions.len(), 1);
+    }
+
+    #[test]
+    fn run_prep_dry_run_creates_no_files() {
         let dir = tempfile::tempdir().unwrap();
         let cwd = dir.path();
 
