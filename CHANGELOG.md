@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2025-03-06
+
+### Changed
+
+- Streamlined prep workflow documentation with zrk prep command integration
+  - Replaced manual multi-step prep process with single `zrk prep` command
+  - Consolidated scope identification into three modes (git range, non-contiguous commits, topic search)
+  - Moved token budget checking before prep execution with repomix token counting
+  - Simplified context resolution with auto-detection of triggered roles and file inclusion
+  - Removed intermediate file creation steps (role-plan.md, file-map.md pre-generation)
+  - Updated anti-patterns section to reflect new automated workflow
+  - Reduced prep documentation from 135 to 99 lines while maintaining completeness
+  - Aligned prep-review.md with automated tooling capabilities for faster review preparation
+
+- Updated review-checklist.md to reflect streamlined workflow
+
 ## [0.6.0] - 2025-03-06
 
 ### Added
