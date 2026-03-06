@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-03-06
+
+### Added
+
+- New `prep` command for comprehensive review preparation
+  - Three input modes: git ranges, commit hashes, and topic search
+  - Role trigger detection system with 12 specialized review roles
+  - Automatic role activation based on changed file patterns
+  - Manual role selection support
+  - Structured review preparation output with role-specific standards
+  - File annotations showing which roles are triggered by each file
+  - Git diff parsing for commit-based reviews
+  - Ripgrep content search for topic-based reviews
+  - Comprehensive error handling for invalid git ranges and missing files
+
+- Role-based review scoping
+  - Performance Engineer (PE) - DB queries, async code, nested loops
+  - Security Engineer (SE) - Auth code, new dependencies
+  - Operations Engineer (OE) - New endpoints, config changes
+  - Data Engineer (DE) - Data pipelines, ETL, migrations
+  - UX Designer (UX) - UI components, user flows
+  - Cloud Architect (CL) - Infrastructure, cloud resources
+  - CEO - Breaking changes, public API changes
+  - Devil's Advocate (DA) - Challenge assumptions
+  - ML Engineer (MLE) - ML models, training pipelines
+  - API Designer (API) - API endpoints, contracts
+  - FinOps (FinOps) - Cost optimization, resource usage
+  - Developer Experience (DX) - Developer tools, workflows
+
+### Changed
+
+- Updated error types to support prep-specific error variants
+- Enhanced main.rs with prep command integration
+
 ## [0.5.3] - 2025-03-05
 
 ### Changed
