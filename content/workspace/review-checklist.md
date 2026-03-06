@@ -4,19 +4,17 @@ Before uploading materials to Claude.ai, verify:
 
 ## Materials
 
-- [ ] `review_context.xml` exists in `.materials/<timestamp>/`
-- [ ] `role_standards_bundle.md` exists — contains triggered roles + 3 core roles
-- [ ] Token estimate < 100K (file size < ~400KB is generally safe)
-- [ ] `review_prompt.md` has scope and description filled in
-- [ ] `review_prompt.md` has `## Plan Before Executing` section (roles + execution order)
-- [ ] Change type checkboxes / additional roles section reviewed
-- [ ] `review.patch` generated
+- [ ] `zrk prep <scope>` was run — `.materials/<timestamp>/` exists
+- [ ] `review_context.xml` exists and is < 400KB (~100K tokens)
+- [ ] `standards/` contains core files + triggered role standards
+- [ ] `review_prompt.md` — specific questions filled in (or confirmed blank)
+- [ ] `review_prompt.md` — additional/skip roles updated if needed
+- [ ] `review.patch` generated (git modes only)
 
 ## Context Quality
 
 - [ ] `project-context.md` has real content (not just empty scaffold)
 - [ ] If `review_memory.md` exists — was it read before this review?
-- [ ] Specific questions added to prompt (not just generic focus areas)
 - [ ] Entry-point / composition file included if prompt asks about
       middleware ordering, routing, or module wiring
 - [ ] If diff touches queries or auth logic: verify query/logic bodies are
@@ -29,9 +27,14 @@ Before uploading materials to Claude.ai, verify:
 - [ ] Lockfiles, build artifacts excluded
 - [ ] `.archignore` patterns applied
 
-## Upload Order to Claude.ai
+## Upload
 
-1. Upload `review_context.xml` first
-2. Upload `role_standards_bundle.md` second
-3. Paste content of `review_prompt.md` as your message
-4. If `review_memory.md` exists: mention "See also review memory for recurring patterns"
+Follow the zip command and order in `UPLOAD_ORDER.md`:
+
+```bash
+cd .materials && zip -r ../review-<TS>.zip <TS>/
+```
+
+Then upload the zip to Claude.ai and paste `review_prompt.md` as your message.
+
+If `review_memory.md` exists: mention "See also review memory for recurring patterns"
