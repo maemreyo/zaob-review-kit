@@ -9,6 +9,8 @@ pub enum ZrkError {
     ContentNotFound(String),
     #[allow(dead_code)]
     PermissionDenied(PathBuf),
+    /// User-facing error from `zrk prep` with context and hints.
+    Prep(String),
 }
 
 impl fmt::Display for ZrkError {
@@ -16,7 +18,11 @@ impl fmt::Display for ZrkError {
         match self {
             ZrkError::Io(e) => write!(f, "I/O error: {}", e),
             ZrkError::UnknownAgent(name) => {
-                write!(f, "Unknown agent: '{}'\n  → Supported: kiro, claude-code, cursor, windsurf", name)
+                write!(
+                    f,
+                    "Unknown agent: '{}'\n  → Supported: kiro, claude-code, cursor, windsurf",
+                    name
+                )
             }
             ZrkError::ContentNotFound(name) => {
                 write!(f, "Content not found: '{}'", name)
@@ -28,6 +34,7 @@ impl fmt::Display for ZrkError {
                     path.display()
                 )
             }
+            ZrkError::Prep(msg) => write!(f, "{}", msg),
         }
     }
 }

@@ -11,7 +11,10 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "zrk", about = "Install review workflow files into AI coding agent configs")]
+#[command(
+    name = "zrk",
+    about = "Install review workflow files into AI coding agent configs"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
@@ -61,6 +64,8 @@ pub enum Command {
     List,
     /// Interactive first-time setup wizard
     Init,
+    /// Prepare review materials for Claude.ai upload
+    Prep(commands::prep::PrepArgs),
 }
 
 fn main() {
@@ -78,6 +83,7 @@ fn main() {
         Command::Status => commands::status::run_status(&cli),
         Command::List => commands::list::run_list(&cli),
         Command::Init => commands::init::run_init(&cli),
+        Command::Prep(ref args) => commands::prep::run_prep(&cli, args),
     };
 
     if let Err(e) = result {
@@ -106,5 +112,49 @@ mod tests {
     fn cli_parse_install_all_dry_run() {
         let cli = Cli::try_parse_from(["zrk", "install-all", "--dry-run"]).unwrap();
         assert!(cli.dry_run);
+    }
+
+    #[test]
+    fn cli_parse_prep_git_range() {
+        let cli = Cli::try_parse_from(["zrk", "prep", "HEAD~3..HEAD"]).unwrap();
+        if let Command::Prep(args) = cli.command {
+            assert_eq!(args.scope, vec!["HEAD~3..HEAD"]);
+            assert!(args.topic.is_none());
+        } else {
+            panic!("expected Prep");
+        }
+    }
+
+    #[test]
+    fn cli_parse_prep_commit_hashes() {
+        let cli = Cli::try_parse_from(["zrk", "prep", "abc123", "def456"]).unwrap();
+        if let Command::Prep(args) = cli.command {
+            assert_eq!(args.scope, vec!["abc123", "def456"]);
+        } else {
+            panic!("expected Prep");
+        }
+    }
+
+    #[test]
+    fn cli_parse_prep_topic() {
+        let cli = Cli::try_parse_from(["zrk", "prep", "--topic", "phase-0"]).unwrap();
+        if let Command::Prep(args) = cli.command {
+            assert_eq!(args.topic.as_deref(), Some("phase-0"));
+            assert!(args.scope.is_empty());
+        } else {
+            panic!("expected Prep");
+        }
+    }
+
+    #[test]
+    fn cli_parse_prep_with_cwd() {
+        let cli =
+            Cli::try_parse_from(["zrk", "--cwd", "/tmp/project", "prep", "HEAD~1..HEAD"]).unwrap();
+        assert!(cli.cwd.is_some());
+        if let Command::Prep(args) = cli.command {
+            assert_eq!(args.scope, vec!["HEAD~1..HEAD"]);
+        } else {
+            panic!("expected Prep");
+        }
     }
 }
