@@ -13,6 +13,9 @@ use std::process::Command;
 ///   1. `--topic KEYWORD`               — ripgrep content search
 ///   2. `zrk prep HEAD~3..HEAD`         — git range (single arg containing "..")
 ///   3. `zrk prep abc123 def456 ...`    — space-separated commit hashes
+///
+/// Use `--include` to add extra files to the repomix context (e.g. docs, spec files
+/// the user referenced in their request).
 #[derive(clap::Args, Debug)]
 pub struct PrepArgs {
     /// Git range (HEAD~3..HEAD), commit hashes (abc123 def456), or use --topic
@@ -22,6 +25,16 @@ pub struct PrepArgs {
     /// Content search topic: finds files via ripgrep instead of git diff
     #[arg(long, value_name = "KEYWORD")]
     pub topic: Option<String>,
+
+    /// Extra files to include in review_context.xml beyond the changed files
+    /// (e.g. architecture docs, spec files, referenced context)
+    #[arg(long = "include", value_name = "FILE", num_args = 1..)]
+    pub extra_files: Vec<String>,
+
+    /// Documentation folders to scan and include (all .md files, excluding reviews/)
+    /// e.g. --docs docs/architecture/v1 docs/tdd
+    #[arg(long = "docs", value_name = "DIR", num_args = 1..)]
+    pub doc_dirs: Vec<String>,
 }
 
 // ── Scope model ───────────────────────────────────────────────────────────────
@@ -87,15 +100,7 @@ static ROLE_TRIGGERS: &[RoleTrigger] = &[
         code: "pe",
         standard: "04-pe-standard.md",
         label: "Performance Engineer",
-        patterns: &[
-            "migration",
-            ".sql",
-            "query",
-            "queries",
-            "async",
-            "cache",
-            "index",
-        ],
+        patterns: &["migration", ".sql", "query", "queries", "async", "cache", "index"],
     },
     RoleTrigger {
         id: "05",
@@ -103,17 +108,8 @@ static ROLE_TRIGGERS: &[RoleTrigger] = &[
         standard: "05-se-standard.md",
         label: "Security Engineer",
         patterns: &[
-            "auth",
-            "login",
-            "token",
-            "permission",
-            "session",
-            "secret",
-            "password",
-            "crypto",
-            "jwt",
-            "oauth",
-            "rbac",
+            "auth", "login", "token", "permission", "session", "secret", "password",
+            "crypto", "jwt", "oauth", "rbac",
         ],
     },
     RoleTrigger {
@@ -122,8 +118,9 @@ static ROLE_TRIGGERS: &[RoleTrigger] = &[
         standard: "06-oe-standard.md",
         label: "Operations Engineer",
         patterns: &[
-            "config", ".env", "job", "cron", "schedule", "route", "handler", "endpoint", "docker",
-            "compose", "deploy",
+            "hand.toml", ".env", "cron", "docker", "compose", "deploy",
+            "k8s", "helm", "terraform", "systemd", "supervisor", "nginx",
+            "justfile", "makefile", "ci.yml", "workflow.yml",
         ],
     },
     RoleTrigger {
@@ -131,7 +128,7 @@ static ROLE_TRIGGERS: &[RoleTrigger] = &[
         code: "de",
         standard: "07-de-standard.md",
         label: "Database Engineer",
-        patterns: &["migration", "schema", "model", ".sql", "seed", "database"],
+        patterns: &["migration", "schema", ".sql", "seed", "database", "db_", "_db.", "diesel", "sqlx", "prisma"],
     },
     RoleTrigger {
         id: "08",
@@ -139,16 +136,8 @@ static ROLE_TRIGGERS: &[RoleTrigger] = &[
         standard: "08-ux-standard.md",
         label: "Frontend / UX Engineer",
         patterns: &[
-            ".vue",
-            ".tsx",
-            ".jsx",
-            ".css",
-            ".scss",
-            "component",
-            "page",
-            "view",
-            "style",
-            ".html",
+            ".vue", ".tsx", ".jsx", ".css", ".scss", "component", "page",
+            "view", "style", ".html",
         ],
     },
     RoleTrigger {
@@ -156,16 +145,7 @@ static ROLE_TRIGGERS: &[RoleTrigger] = &[
         code: "cl",
         standard: "09-cl-standard.md",
         label: "Compliance Engineer",
-        patterns: &[
-            "gdpr",
-            "pii",
-            "cookie",
-            "consent",
-            "privacy",
-            "compliance",
-            "licence",
-            "license",
-        ],
+        patterns: &["gdpr", "pii", "cookie", "consent", "privacy", "compliance", "licence", "license"],
     },
     RoleTrigger {
         id: "10",
@@ -186,39 +166,21 @@ static ROLE_TRIGGERS: &[RoleTrigger] = &[
         code: "mle",
         standard: "12-mle-standard.md",
         label: "ML / AI Engineer",
-        patterns: &[
-            "model",
-            "llm",
-            "embedding",
-            "dataset",
-            "inference",
-            "train",
-            "predict",
-        ],
+        patterns: &["/llm", "_llm", "llm_", "llm.", "embedding", "dataset", "inference", "openai", "anthropic", "vector_store", "torch", "tensorflow", "ml_model"],
     },
     RoleTrigger {
         id: "13",
         code: "api",
         standard: "13-api-standard.md",
         label: "API Design",
-        patterns: &[
-            "route", "handler", "endpoint", "openapi", "swagger", "graphql", "grpc",
-        ],
+        patterns: &["route", "handler", "endpoint", "openapi", "swagger", "graphql", "grpc"],
     },
     RoleTrigger {
         id: "14",
         code: "finops",
         standard: "14-finops-standard.md",
         label: "FinOps",
-        patterns: &[
-            ".tf",
-            "terraform",
-            "lambda",
-            "cloudformation",
-            "kubernetes",
-            "k8s",
-            "helm",
-        ],
+        patterns: &[".tf", "terraform", "lambda", "cloudformation", "kubernetes", "k8s", "helm"],
     },
     RoleTrigger {
         id: "15",
@@ -304,14 +266,40 @@ fn rg_topic_files(topic: &str, cwd: &Path) -> Result<Vec<String>, ZrkError> {
         .args(["-l", topic])
         .current_dir(cwd)
         .output()
-        .map_err(|_| {
-            ZrkError::Prep(
-                "ripgrep (rg) not found.\n  Install: brew install ripgrep  /  apt install ripgrep"
-                    .into(),
-            )
-        })?;
+        .map_err(|_| ZrkError::Prep(
+            "ripgrep (rg) not found.\n  Install: brew install ripgrep  /  apt install ripgrep".into(),
+        ))?;
     // rg exits 1 when no matches — that is not an error
     Ok(lines_from_bytes(&out.stdout))
+}
+
+fn expand_doc_dirs(dirs: &[String], cwd: &Path) -> Vec<String> {
+    let mut files = Vec::new();
+    for dir in dirs {
+        let path = cwd.join(dir);
+        if path.is_dir() {
+            collect_md_files(&path, &mut files, cwd);
+        }
+    }
+    files
+}
+
+fn collect_md_files(dir: &Path, out: &mut Vec<String>, cwd: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let p = entry.path();
+        // Skip reviews/ subdirectories — stale analysis inflates token budget
+        if p.is_dir() {
+            if p.file_name().map_or(false, |n| n == "reviews") {
+                continue;
+            }
+            collect_md_files(&p, out, cwd);
+        } else if p.extension().map_or(false, |e| e == "md") {
+            if let Ok(rel) = p.strip_prefix(cwd) {
+                out.push(rel.to_string_lossy().into_owned());
+            }
+        }
+    }
 }
 
 fn lines_from_bytes(bytes: &[u8]) -> Vec<String> {
@@ -325,43 +313,58 @@ fn lines_from_bytes(bytes: &[u8]) -> Vec<String> {
 
 fn command_available(cmd: &str) -> bool {
     // Try "which" (Unix) then "where" (Windows)
-    Command::new("which")
-        .arg(cmd)
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-        || Command::new("where")
-            .arg(cmd)
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
+    Command::new("which").arg(cmd).output().map(|o| o.status.success()).unwrap_or(false)
+        || Command::new("where").arg(cmd).output().map(|o| o.status.success()).unwrap_or(false)
 }
 
 // ── Repomix & patch ───────────────────────────────────────────────────────────
 
-fn run_repomix(scope: &PrepScope, cwd: &Path, output_path: &Path) -> bool {
+fn run_repomix(scope: &PrepScope, extra_files: &[String], cwd: &Path, output_path: &Path) -> bool {
     let out = output_path.display().to_string();
-    let cmd = match scope {
-        PrepScope::GitRange(range) => {
-            let logs = extract_n_commits(range)
-                .map(|n| format!("--include-logs-count {} ", n))
-                .unwrap_or_default();
-            format!(
-                "git diff {} --name-only | repomix --stdin --include-diffs {}--style xml --output {}",
-                range, logs, out
-            )
-        }
-        PrepScope::CommitHashes(hashes) => format!(
-            "git show {} --name-only --pretty=format: | sort -u | repomix --stdin --style xml --output {}",
-            hashes.join(" "),
-            out
+
+    // Build the file-list pipeline segment.
+    // If extra files are present, use a group { ...; ...; } so all sources
+    // feed into a single sort -u before repomix.
+    let (file_list_cmd, needs_group) = match scope {
+        PrepScope::GitRange(range) => (
+            format!("git diff {} --name-only", range),
+            !extra_files.is_empty(),
         ),
-        PrepScope::Topic(topic) => format!(
-            "rg -l {} | repomix --stdin --style xml --output {}",
-            shell_quote(topic),
-            out
+        PrepScope::CommitHashes(hashes) => (
+            format!("git show {} --name-only --pretty=format:", hashes.join(" ")),
+            !extra_files.is_empty(),
+        ),
+        PrepScope::Topic(topic) => (
+            format!("rg -l {}", shell_quote(topic)),
+            !extra_files.is_empty(),
         ),
     };
+
+    let repomix_flags = match scope {
+        PrepScope::GitRange(range) => {
+            let logs = extract_n_commits(range)
+                .map(|n| format!(" --include-logs-count {}", n))
+                .unwrap_or_default();
+            format!("--stdin --include-diffs{} --style xml --output {}", logs, out)
+        }
+        _ => format!("--stdin --style xml --output {}", out),
+    };
+
+    let cmd = if needs_group {
+        // { git-cmd; printf 'extra\n' 'files\n'; } | sort -u | repomix ...
+        let extra_printf = extra_files
+            .iter()
+            .map(|f| shell_quote(f))
+            .collect::<Vec<_>>()
+            .join(" ");
+        format!(
+            "{{ {}; printf '%s\\n' {}; }} | sort -u | repomix {}",
+            file_list_cmd, extra_printf, repomix_flags
+        )
+    } else {
+        format!("{} | repomix {}", file_list_cmd, repomix_flags)
+    };
+
     Command::new("sh")
         .args(["-c", &cmd])
         .current_dir(cwd)
@@ -450,8 +453,6 @@ fn write_standards(materials_dir: &Path, triggered: &[&RoleTrigger]) -> Result<(
     let all = content::all_content();
 
     let always = [
-        "review-prompting.md",
-        "review-roles.md",
         "00-loading-guide.md",
         "01-swe-standard.md",
         "02-sa-standard.md",
@@ -499,11 +500,7 @@ fn write_temp_stubs(
         ));
     }
 
-    let mut order_parts = vec![
-        "01-swe".to_string(),
-        "02-sa".to_string(),
-        "03-qa".to_string(),
-    ];
+    let mut order_parts = vec!["01-swe".to_string(), "02-sa".to_string(), "03-qa".to_string()];
     for t in triggered {
         order_parts.push(format!("{}-{}", t.id, t.code));
     }
@@ -640,18 +637,15 @@ fn write_review_prompt(
             .to_string(),
     );
     ctx_files.push(
-        "- `temp/file-map.md` — file-to-role mapping from prep (fill in during review)".to_string(),
+        "- `temp/file-map.md` — file-to-role mapping from prep (fill in during review)"
+            .to_string(),
     );
     ctx_files.push(
         "- `temp/findings.md` — append every [BLOCKER] and [MAJOR] here after each role file"
             .to_string(),
     );
 
-    let mut order_parts = vec![
-        "01-swe".to_string(),
-        "02-sa".to_string(),
-        "03-qa".to_string(),
-    ];
+    let mut order_parts = vec!["01-swe".to_string(), "02-sa".to_string(), "03-qa".to_string()];
     for t in triggered {
         order_parts.push(format!("{}-{}", t.id, t.code));
     }
@@ -763,8 +757,9 @@ fn write_upload_order(materials_dir: &Path, triggered: &[&RoleTrigger]) -> Resul
         "# Upload to Claude.ai\n\n\
          **Easiest**: zip the entire materials folder and attach, then paste `review_prompt.md` as your message.\n\n\
          ```bash\n\
-         cd .materials && zip -r ../review-{ts}.zip {ts}/\n\
+         cd .materials && zip -r ../review-{ts}.zip {ts}/ && cd ..\n\
          ```\n\n\
+         This creates `review-{ts}.zip` in the project root (next to `.materials/`).\n\n\
          **Alternative** — upload files individually in this order:\n\n\
          {numbered}\n\
          Then paste `review_prompt.md` as your message (or upload it).\n\n\
@@ -781,9 +776,9 @@ fn write_upload_order(materials_dir: &Path, triggered: &[&RoleTrigger]) -> Resul
 // ── Main entry point ──────────────────────────────────────────────────────────
 
 fn resolve_cwd(cli: &Cli) -> PathBuf {
-    cli.cwd
-        .clone()
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+    cli.cwd.clone().unwrap_or_else(|| {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    })
 }
 
 pub fn run_prep(cli: &Cli, args: &PrepArgs) -> Result<(), ZrkError> {
@@ -819,7 +814,10 @@ pub fn run_prep(cli: &Cli, args: &PrepArgs) -> Result<(), ZrkError> {
             output::info("  Roles: swe, sa, qa (core only — no extra triggers detected)");
         } else {
             let codes: Vec<&str> = triggered.iter().map(|t| t.code).collect();
-            output::info(&format!("  Triggered: swe, sa, qa + {}", codes.join(", ")));
+            output::info(&format!(
+                "  Triggered: swe, sa, qa + {}",
+                codes.join(", ")
+            ));
         }
     }
 
@@ -853,12 +851,23 @@ pub fn run_prep(cli: &Cli, args: &PrepArgs) -> Result<(), ZrkError> {
 
     // ── 6. Run repomix (optional) ─────────────────────────────────────────────
     let context_path = materials_dir.join("review_context.xml");
+
+    // Merge --include files and --docs folder expansions
+    let mut all_extra = args.extra_files.clone();
+    all_extra.extend(expand_doc_dirs(&args.doc_dirs, &cwd));
+    all_extra.sort();
+    all_extra.dedup();
+
+    if !cli.quiet && !all_extra.is_empty() {
+        output::info(&format!("  Extra files: {}", all_extra.len()));
+    }
+
     let has_context;
     if command_available("repomix") {
         if !cli.quiet {
             output::info("  Running repomix...");
         }
-        has_context = run_repomix(&scope, &cwd, &context_path);
+        has_context = run_repomix(&scope, &all_extra, &cwd, &context_path);
         if !has_context {
             output::warning("repomix exited with an error — review_context.xml may be incomplete");
         }
@@ -892,11 +901,7 @@ fn print_done(
     output::success(&format!("Materials ready in .materials/{}/", ts));
     println!();
 
-    let ctx_note = if has_context {
-        ""
-    } else {
-        "  ← missing: run repomix manually"
-    };
+    let ctx_note = if has_context { "" } else { "  ← missing: run repomix manually" };
     println!("  review_context.xml{}", ctx_note);
     if has_patch {
         println!("  review.patch");
@@ -941,31 +946,27 @@ fn print_done(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
+    use crate::Command as ZrkCommand;
 
     // ── parse_scope ──────────────────────────────────────────────────────────
 
     #[test]
     fn parse_scope_git_range_with_dots() {
-        let args = PrepArgs {
-            scope: vec!["HEAD~3..HEAD".into()],
-            topic: None,
+        let args = PrepArgs { scope: vec!["HEAD~3..HEAD".into()], topic: None,
+            extra_files: vec![],
+            doc_dirs: vec![]
         };
-        assert!(matches!(
-            parse_scope(&args).unwrap(),
-            PrepScope::GitRange(_)
-        ));
+        assert!(matches!(parse_scope(&args).unwrap(), PrepScope::GitRange(_)));
     }
 
     #[test]
     fn parse_scope_branch_range() {
-        let args = PrepArgs {
-            scope: vec!["feature/auth..main".into()],
-            topic: None,
+        let args = PrepArgs { scope: vec!["feature/auth..main".into()], topic: None,
+            extra_files: vec![],
+            doc_dirs: vec![]
         };
-        assert!(matches!(
-            parse_scope(&args).unwrap(),
-            PrepScope::GitRange(_)
-        ));
+        assert!(matches!(parse_scope(&args).unwrap(), PrepScope::GitRange(_)));
     }
 
     #[test]
@@ -973,6 +974,8 @@ mod tests {
         let args = PrepArgs {
             scope: vec!["abc123".into(), "def456".into(), "ghi789".into()],
             topic: None,
+            extra_files: vec![],
+            doc_dirs: vec![]
         };
         let s = parse_scope(&args).unwrap();
         if let PrepScope::CommitHashes(h) = s {
@@ -984,21 +987,18 @@ mod tests {
 
     #[test]
     fn parse_scope_single_hash_no_dots() {
-        let args = PrepArgs {
-            scope: vec!["abc1234def".into()],
-            topic: None,
+        let args = PrepArgs { scope: vec!["abc1234def".into()], topic: None,
+            extra_files: vec![],
+            doc_dirs: vec![]
         };
-        assert!(matches!(
-            parse_scope(&args).unwrap(),
-            PrepScope::CommitHashes(_)
-        ));
+        assert!(matches!(parse_scope(&args).unwrap(), PrepScope::CommitHashes(_)));
     }
 
     #[test]
     fn parse_scope_topic_flag() {
-        let args = PrepArgs {
-            scope: vec![],
-            topic: Some("phase-0".into()),
+        let args = PrepArgs { scope: vec![], topic: Some("phase-0".into()),
+            extra_files: vec![],
+            doc_dirs: vec![]
         };
         assert!(matches!(parse_scope(&args).unwrap(), PrepScope::Topic(_)));
     }
@@ -1008,15 +1008,17 @@ mod tests {
         let args = PrepArgs {
             scope: vec!["HEAD~3..HEAD".into()],
             topic: Some("auth".into()),
+            extra_files: vec![],
+            doc_dirs: vec![]
         };
         assert!(matches!(parse_scope(&args).unwrap(), PrepScope::Topic(_)));
     }
 
     #[test]
     fn parse_scope_empty_is_error() {
-        let args = PrepArgs {
-            scope: vec![],
-            topic: None,
+        let args = PrepArgs { scope: vec![], topic: None,
+            extra_files: vec![],
+            doc_dirs: vec![]
         };
         assert!(parse_scope(&args).is_err());
     }
@@ -1027,10 +1029,7 @@ mod tests {
     fn detects_se_from_auth_path() {
         let files = vec!["src/auth/handler.rs".into()];
         let roles = detect_triggered_roles(&files);
-        assert!(
-            roles.iter().any(|r| r.code == "se"),
-            "SE should trigger on auth/"
-        );
+        assert!(roles.iter().any(|r| r.code == "se"), "SE should trigger on auth/");
     }
 
     #[test]
@@ -1053,10 +1052,7 @@ mod tests {
         // DA has no patterns — must never appear in auto-detect regardless of files
         let files: Vec<String> = (0..50).map(|i| format!("src/module{}.rs", i)).collect();
         let roles = detect_triggered_roles(&files);
-        assert!(
-            !roles.iter().any(|r| r.code == "da"),
-            "DA must not auto-trigger"
-        );
+        assert!(!roles.iter().any(|r| r.code == "da"), "DA must not auto-trigger");
     }
 
     #[test]
@@ -1120,11 +1116,7 @@ mod tests {
         let cwd = dir.path();
 
         // Set up a minimal git repo with an auth file so SE triggers
-        Command::new("git")
-            .args(["init"])
-            .current_dir(cwd)
-            .output()
-            .ok();
+        Command::new("git").args(["init"]).current_dir(cwd).output().ok();
         Command::new("git")
             .args(["commit", "--allow-empty", "-m", "init"])
             .envs([
@@ -1142,11 +1134,7 @@ mod tests {
         std::fs::create_dir_all(cwd.join("migrations")).unwrap();
         std::fs::write(cwd.join("migrations/001.sql"), "CREATE TABLE t (id INT);").unwrap();
 
-        Command::new("git")
-            .args(["add", "."])
-            .current_dir(cwd)
-            .output()
-            .ok();
+        Command::new("git").args(["add", "."]).current_dir(cwd).output().ok();
         Command::new("git")
             .args(["commit", "-m", "add auth + migration"])
             .envs([
@@ -1160,9 +1148,11 @@ mod tests {
             .ok();
 
         let cli = crate::Cli {
-            command: crate::Command::Prep(PrepArgs {
+            command: ZrkCommand::Prep(PrepArgs {
                 scope: vec!["HEAD~1..HEAD".into()],
                 topic: None,
+                extra_files: vec![],
+                doc_dirs: vec![],
             }),
             target: "kiro".to_string(),
             all_targets: false,
@@ -1175,6 +1165,8 @@ mod tests {
         let args = PrepArgs {
             scope: vec!["HEAD~1..HEAD".into()],
             topic: None,
+            extra_files: vec![],
+            doc_dirs: vec![],
         };
 
         run_prep(&cli, &args).unwrap();
@@ -1196,6 +1188,8 @@ mod tests {
 
         // Core standards always present
         for name in &[
+            "review-prompting.md",
+            "review-roles.md",
             "00-loading-guide.md",
             "01-swe-standard.md",
             "02-sa-standard.md",
@@ -1203,8 +1197,7 @@ mod tests {
         ] {
             assert!(
                 ts_dir.join("standards").join(name).exists(),
-                "missing: standards/{}",
-                name
+                "missing: standards/{}", name
             );
         }
 
@@ -1214,20 +1207,11 @@ mod tests {
             "SE should be triggered by auth path"
         );
         // DE + PE triggered by migrations/001.sql
-        assert!(
-            ts_dir.join("standards/07-de-standard.md").exists(),
-            "DE from .sql"
-        );
-        assert!(
-            ts_dir.join("standards/04-pe-standard.md").exists(),
-            "PE from .sql"
-        );
+        assert!(ts_dir.join("standards/07-de-standard.md").exists(), "DE from .sql");
+        assert!(ts_dir.join("standards/04-pe-standard.md").exists(), "PE from .sql");
 
         // OE from route/handler patterns in auth handler
-        assert!(
-            ts_dir.join("standards/06-oe-standard.md").exists(),
-            "OE from handler"
-        );
+        assert!(ts_dir.join("standards/06-oe-standard.md").exists(), "OE from handler");
 
         // Stubs
         assert!(ts_dir.join("temp/role-plan.md").exists());
@@ -1241,19 +1225,13 @@ mod tests {
         // role-plan.md mentions SE and is pre-filled
         let role_plan = std::fs::read_to_string(ts_dir.join("temp/role-plan.md")).unwrap();
         assert!(role_plan.contains("se"), "role-plan should list SE");
-        assert!(
-            role_plan.contains("01-swe"),
-            "execution order should start with 01-swe"
-        );
-        assert!(
-            role_plan.contains("99-verdict"),
-            "execution order should end with 99-verdict"
-        );
+        assert!(role_plan.contains("01-swe"), "execution order should start with 01-swe");
+        assert!(role_plan.contains("99-verdict"), "execution order should end with 99-verdict");
 
         // findings.md has the protocol comment
         let findings = std::fs::read_to_string(ts_dir.join("temp/findings.md")).unwrap();
         assert!(findings.contains("[BLOCKER]"));
-        assert!(findings.contains("Running Findings Log"));
+        assert!(findings.contains("findings.md"));
 
         // review_prompt.md is self-contained with inline protocol
         let prompt = std::fs::read_to_string(ts_dir.join("review_prompt.md")).unwrap();
@@ -1262,14 +1240,72 @@ mod tests {
         assert!(prompt.contains("sequential") || prompt.contains("Sequential"));
         assert!(prompt.contains("00-summary.md"));
         assert!(prompt.contains("Plan Before Executing"));
-        assert!(
-            prompt.contains("05-se-standard.md"),
-            "prompt should list SE standard"
-        );
+        assert!(prompt.contains("05-se-standard.md"), "prompt should list SE standard");
 
         // UPLOAD_ORDER.md lists the triggered standards
         let upload = std::fs::read_to_string(ts_dir.join("UPLOAD_ORDER.md")).unwrap();
         assert!(upload.contains("05-se-standard.md"));
+    }
+
+    #[test]
+    fn cli_parse_prep_with_include() {
+        let cli = Cli::try_parse_from([
+            "zrk", "prep", "abc123", "--include", "AGENTS.md", "README.md",
+        ])
+        .unwrap();
+        if let ZrkCommand::Prep(args) = cli.command {
+            assert_eq!(args.extra_files, vec!["AGENTS.md", "README.md"]);
+        } else {
+            panic!("expected Prep");
+        }
+    }
+
+    #[test]
+    fn cli_parse_prep_with_docs() {
+        let cli = Cli::try_parse_from([
+            "zrk", "prep", "HEAD~1..HEAD", "--docs", "docs/architecture/v1",
+        ])
+        .unwrap();
+        if let ZrkCommand::Prep(args) = cli.command {
+            assert_eq!(args.doc_dirs, vec!["docs/architecture/v1"]);
+        } else {
+            panic!("expected Prep");
+        }
+    }
+
+    #[test]
+    fn expand_doc_dirs_returns_md_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let arch = dir.path().join("docs/arch");
+        std::fs::create_dir_all(&arch).unwrap();
+        std::fs::write(arch.join("overview.md"), "# Overview").unwrap();
+        std::fs::write(arch.join("infra.md"), "# Infra").unwrap();
+        std::fs::write(arch.join("schema.sql"), "CREATE TABLE t (id INT);").unwrap();
+
+        let files = expand_doc_dirs(&["docs/arch".to_string()], dir.path());
+        assert_eq!(files.len(), 2, "only .md files");
+        assert!(files.iter().all(|f| f.ends_with(".md")));
+    }
+
+    #[test]
+    fn expand_doc_dirs_skips_reviews_subdir() {
+        let dir = tempfile::tempdir().unwrap();
+        let arch = dir.path().join("docs/arch");
+        let reviews = arch.join("reviews");
+        std::fs::create_dir_all(&reviews).unwrap();
+        std::fs::write(arch.join("overview.md"), "# Overview").unwrap();
+        std::fs::write(reviews.join("old-review.md"), "old").unwrap();
+
+        let files = expand_doc_dirs(&["docs/arch".to_string()], dir.path());
+        assert_eq!(files.len(), 1);
+        assert!(!files[0].contains("reviews"));
+    }
+
+    #[test]
+    fn expand_doc_dirs_missing_dir_returns_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let files = expand_doc_dirs(&["nonexistent/path".to_string()], dir.path());
+        assert!(files.is_empty());
     }
 
     #[test]
@@ -1278,9 +1314,11 @@ mod tests {
         let cwd = dir.path();
 
         let cli = crate::Cli {
-            command: crate::Command::Prep(PrepArgs {
+            command: ZrkCommand::Prep(PrepArgs {
                 scope: vec!["HEAD~1..HEAD".into()],
                 topic: None,
+                extra_files: vec![],
+                doc_dirs: vec![],
             }),
             target: "kiro".to_string(),
             all_targets: false,
@@ -1293,6 +1331,8 @@ mod tests {
         let args = PrepArgs {
             scope: vec!["HEAD~1..HEAD".into()],
             topic: None,
+            extra_files: vec![],
+            doc_dirs: vec![],
         };
 
         run_prep(&cli, &args).unwrap();

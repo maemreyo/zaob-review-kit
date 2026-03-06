@@ -27,7 +27,7 @@ User says something like:
    TODOs that were meant to be resolved, tests that only pass trivially.
    Self-review catches the easy stuff so the actual review focuses on what matters.
 
-1. **Identify scope** — determine the right input for `zrk prep`.
+1. **Identify scope + relevant docs** — determine the right input for `zrk prep`.
 
    Three modes depending on what the user asked for:
 
@@ -37,22 +37,39 @@ User says something like:
    git log --oneline -<N>   # confirm which commits are in scope
    ```
 
-   Produces input: `HEAD~<N>..HEAD` or `feature/branch..main`
-
    **Mode B — non-contiguous commits:**
 
    ```bash
    git log --oneline   # identify specific commit hashes
    ```
 
-   Produces input: `abc123 def456 ghi789` (space-separated hashes)
-
    **Mode C — content / topic search:**
 
    Produces input: `--topic "<keyword>"`
 
+   **Find relevant docs to include** — check these locations and pick what's
+   relevant to the scope (architecture module, feature area, security concerns):
+
+   ```bash
+   # What docs exist?
+   find docs/ -name "*.md" | sort
+   ls *.md 2>/dev/null          # root-level: README, AGENTS, CLAUDE, CONTRIBUTING
+
+   # Filter to relevant modules (e.g. scope touches scheduling/attendance)
+   find docs/ -name "*.md" | grep -i "schedule\|class\|attendance\|enrollment"
+
+   # If user referenced a specific file (e.g. "#1b.md", "phase 1B"):
+   find . -name "*1b*" -o -name "*phase*1b*" 2>/dev/null | grep -v ".materials"
+   ```
+
+   Common doc locations in this project:
+   - `docs/architecture/v1/` — system module specs (pick the relevant modules)
+   - `docs/tdd/` — test design docs (include if QA/test coverage is a concern)
+   - `AGENTS.md` / `CLAUDE.md` — agent instructions (include if scope touches agent config)
+   - `README.md` — overview (include for onboarding-heavy reviews)
+
 2. **Check token budget** — Before running prep, estimate context size to
-   avoid generating a file too large for Claude.ai (target: < 100K tokens):
+   avoid generating a file too large for Claude.ai (target: < 150K tokens):
 
    ```bash
    # Mode A / B — commit-based
@@ -62,9 +79,8 @@ User says something like:
    rg -l "<keyword>" | repomix --stdin --token-count-tree
    ```
 
-   If over budget, plan to add architecture docs only if the review needs them.
-   The default `zrk prep` repomix call covers source only. For advanced packing
-   with custom file inclusion — see `pack-materials.md`.
+   If over budget, drop test files or large auto-generated files first.
+   For advanced packing with custom file inclusion — see `pack-materials.md`.
 
 3. **Run `zrk prep`** — one command creates the entire materials folder:
 
@@ -81,9 +97,16 @@ User says something like:
    # Mode C — topic search (requires ripgrep)
    zrk prep --topic "phase-0"
 
+   # With extra files (docs, spec, referenced context)
+   zrk prep abc123 def456 --include docs/architecture/v1/03-class-schedule.md AGENTS.md
+
    # Preview without writing anything
    zrk prep HEAD~3..HEAD --dry-run
    ```
+
+   Use `--include` for any files the user explicitly referenced in their request
+   (e.g. `#1b.md`, architecture docs, spec files). These are added to
+   `review_context.xml` alongside the changed source files.
 
    `zrk prep` does automatically:
    - Creates `.materials/<TS>/` with `standards/`, `reports/`, `temp/`
@@ -124,18 +147,16 @@ User says something like:
    ### ⛔ Anti-patterns — never buffer through intermediate files
 
 <!-- agent:kiro:start -->
-
-> **Kiro:** Both patterns below also hang Kiro's terminal tool.
-> The heredoc (`cat > file << 'EOF'`) with 50+ lines freezes the terminal completely.
-> Always pipe directly — never buffer file lists through temp files or heredocs.
-
+   > **Kiro:** Both patterns below also hang Kiro's terminal tool.
+   > The heredoc (`cat > file << 'EOF'`) with 50+ lines freezes the terminal completely.
+   > Always pipe directly — never buffer file lists through temp files or heredocs.
 <!-- agent:kiro:end -->
 
-```bash
-# ❌ NEVER do this
-git diff ... --name-only > /tmp/files.txt
-repomix --include "$(cat /tmp/files.txt | tr '\n' ',')" ...
-```
+   ```bash
+   # ❌ NEVER do this
+   git diff ... --name-only > /tmp/files.txt
+   repomix --include "$(cat /tmp/files.txt | tr '\n' ',')" ...
+   ```
 
 5. **Fill `temp/file-map.md`** — read the diff in `review_context.xml` and
    fill one row per changed file. Do this NOW, during prep, not during review.
@@ -157,6 +178,7 @@ repomix --include "$(cat /tmp/files.txt | tr '\n' ',')" ...
 6. **Refine `temp/role-plan.md`** — `zrk prep` pre-fills roles from filename
    patterns. Check for false positives or missing roles only apparent from file
    content, then update `review_prompt.md` accordingly:
+
    - Add roles: fill `## Additional Roles` in `review_prompt.md`
    - Remove roles: fill `## Skip Roles` in `review_prompt.md`
 
